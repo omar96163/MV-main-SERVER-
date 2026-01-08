@@ -20,7 +20,7 @@ const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = [
       'https://contactpro-hrmanager.vercel.app',
-      'http://localhost:5174',
+      'https://mv-main-client.vercel.app/',
       'https://dalilyai.com'
     ];
     
