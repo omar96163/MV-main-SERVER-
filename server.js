@@ -20,7 +20,6 @@ const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = [
       "https://contactpro-hrmanager.vercel.app",
-      "https://mv-main-client.vercel.app",
       "https://dalilyai.com",
     ];
 
@@ -31,7 +30,7 @@ const corsOptions = {
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -73,14 +72,16 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // Request logging middleware
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
-  next();
-});
+if (!isProduction) {
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} ${req.method} ${req.originalUrl}`);
+    next();
+  });
+}
 
 // Health check routes
 app.get("/", (req, res) => {
-  res.json({
+  res.status(200).json({
     message: "ContactPro API is running!",
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || "development",
@@ -99,18 +100,15 @@ app.get("/health", (req, res) => {
 });
 
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const auth = require("./routes/auth");
+const profileRoutes = require("./routes/profileRoutes");
+const linkedinScraper = require("./routes/linkedinScraper");
 
 // API Routes with error boundary
-try {
-  app.use("/auth", require("./routes/auth"));
-  app.use("/api/dashboard", dashboardRoutes);
-  app.use("/profiles", require("./routes/profileRoutes"));
-
-  // NEW: LinkedIn scraper routes
-  app.use("/api", require("./routes/linkedinScraper"));
-} catch (routeError) {
-  console.error("Route loading error:", routeError);
-}
+app.use("/auth", auth);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/profiles", profileRoutes);
+app.use("/api", linkedinScraper);
 
 // Global error handling middleware
 app.use((err, req, res, next) => {
