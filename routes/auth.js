@@ -9,16 +9,17 @@ const router = express.Router();
 
 // Helper function to get redirect URLs
 const getRedirectURL = (path) => {
-  const baseURL = process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL 
-    : 'https://contactpro-hrmanager.vercel.app';
+  const baseURL =
+    process.env.NODE_ENV === "production"
+      ? process.env.FRONTEND_URL
+      : "https://contactpro-hrmanager.vercel.app";
   return `${baseURL}${path}`;
 };
 
 // Helper function to create JWT token
 const createToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET, { 
-    expiresIn: process.env.JWT_EXPIRES_IN || "7d" 
+  return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   });
 };
 
@@ -29,7 +30,7 @@ const createUserResponse = (user) => {
     name: user.name,
     email: user.email,
     avatar: user.avatar || null,
-    googleId: user.googleId || null
+    googleId: user.googleId || null,
   };
 };
 
@@ -42,36 +43,38 @@ router.post("/signup", async (req, res) => {
 
     // Input validation
     if (!name || !email || !password) {
-      return res.status(400).json({ 
-        message: "Please provide name, email, and password" 
+      return res.status(400).json({
+        message: "Please provide name, email, and password",
       });
     }
 
     if (password.length < 6) {
-      return res.status(400).json({ 
-        message: "Password must be at least 6 characters long" 
+      return res.status(400).json({
+        message: "Password must be at least 6 characters long",
       });
     }
 
     // Check if user already exists
     let existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
-      return res.status(400).json({ message: "User already exists with this email" });
+      return res
+        .status(400)
+        .json({ message: "User already exists with this email" });
     }
 
     // Hash password
-    const saltRounds = process.env.NODE_ENV === 'production' ? 12 : 10;
+    const saltRounds = process.env.NODE_ENV === "production" ? 12 : 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     // Create user
     const user = await User.create({
       name: name.trim(),
       email: email.toLowerCase().trim(),
-      password: hashedPassword
+      password: hashedPassword,
     });
 
     // Create dashboard for new user (defaults handled in model)
-    await Dashboard.create({ 
+    await Dashboard.create({
       userId: user._id,
       availablePoints: 100,
       totalContacts: 0,
@@ -79,7 +82,7 @@ router.post("/signup", async (req, res) => {
       myUploads: 0,
       uploadedProfileIds: [],
       unlockedContactIds: [],
-      recentActivity: [`Welcome to the platform! You started with 100 points.`]
+      recentActivity: [`Welcome to the platform! You started with 100 points.`],
     });
 
     // Create token
@@ -87,17 +90,17 @@ router.post("/signup", async (req, res) => {
 
     console.log(`New user registered: ${user.email}`);
 
-    res.status(201).json({ 
+    res.status(201).json({
       success: true,
       message: "Account created successfully",
-      user: createUserResponse(user), 
-      token 
+      user: createUserResponse(user),
+      token,
     });
   } catch (err) {
     console.error("Signup error:", err);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Server error during registration",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      error: process.env.NODE_ENV === "development" ? err.message : undefined,
     });
   }
 });
@@ -111,8 +114,8 @@ router.post("/login", async (req, res) => {
 
     // Input validation
     if (!email || !password) {
-      return res.status(400).json({ 
-        message: "Please provide email and password" 
+      return res.status(400).json({
+        message: "Please provide email and password",
       });
     }
 
@@ -124,8 +127,8 @@ router.post("/login", async (req, res) => {
 
     // Check if user has a password (might be Google-only user)
     if (!user.password) {
-      return res.status(400).json({ 
-        message: "Please login with Google or reset your password" 
+      return res.status(400).json({
+        message: "Please login with Google or reset your password",
       });
     }
 
@@ -138,10 +141,10 @@ router.post("/login", async (req, res) => {
     // Ensure user has a dashboard
     let dashboard = await Dashboard.findOne({ userId: user._id });
     if (!dashboard) {
-      dashboard = await Dashboard.create({ 
+      dashboard = await Dashboard.create({
         userId: user._id,
         availablePoints: 100,
-        recentActivity: [`Welcome back! Dashboard created.`]
+        recentActivity: [`Welcome back! Dashboard created.`],
       });
     }
 
@@ -149,17 +152,17 @@ router.post("/login", async (req, res) => {
 
     console.log(`User logged in: ${user.email}`);
 
-    res.json({ 
+    res.json({
       success: true,
       message: "Login successful",
-      user: createUserResponse(user), 
-      token 
+      user: createUserResponse(user),
+      token,
     });
   } catch (err) {
     console.error("Login error:", err);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Server error during login",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      error: process.env.NODE_ENV === "development" ? err.message : undefined,
     });
   }
 });
@@ -169,17 +172,17 @@ router.post("/login", async (req, res) => {
 // =========================
 router.get("/google", (req, res, next) => {
   console.log("Google auth initiated");
-  passport.authenticate("google", { 
+  passport.authenticate("google", {
     scope: ["profile", "email"],
-    prompt: "select_account" // Allow users to choose account
+    prompt: "select_account", // Allow users to choose account
   })(req, res, next);
 });
 
 router.get(
   "/google/callback",
-  passport.authenticate("google", { 
-    failureRedirect: getRedirectURL('/login?error=google_auth_failed'),
-    session: true
+  passport.authenticate("google", {
+    failureRedirect: getRedirectURL("/login?error=google_auth_failed"),
+    session: true,
   }),
   async (req, res) => {
     try {
@@ -187,16 +190,16 @@ router.get(
 
       if (!req.user) {
         console.error("No user in Google callback");
-        return res.redirect(getRedirectURL('/login?error=no_user_data'));
+        return res.redirect(getRedirectURL("/login?error=no_user_data"));
       }
 
       // Ensure user has a dashboard
       let dashboard = await Dashboard.findOne({ userId: req.user._id });
       if (!dashboard) {
-        dashboard = await Dashboard.create({ 
+        dashboard = await Dashboard.create({
           userId: req.user._id,
           availablePoints: 100,
-          recentActivity: [`Welcome! Signed up with Google.`]
+          recentActivity: [`Welcome! Signed up with Google.`],
         });
         console.log(`Dashboard created for Google user: ${req.user.email}`);
       }
@@ -206,11 +209,11 @@ router.get(
       // Redirect with token
       const redirectURL = getRedirectURL(`/google-success?token=${token}`);
       console.log(`Redirecting to: ${redirectURL}`);
-      
+
       res.redirect(redirectURL);
     } catch (err) {
       console.error("Google callback error:", err);
-      res.redirect(getRedirectURL('/login?error=dashboard_creation_failed'));
+      res.redirect(getRedirectURL("/login?error=dashboard_creation_failed"));
     }
   }
 );
@@ -229,8 +232,9 @@ router.post("/forgot-password", async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase().trim() });
     if (!user) {
       // Don't reveal if email exists for security
-      return res.json({ 
-        message: "If an account with that email exists, a reset link has been sent." 
+      return res.json({
+        message:
+          "If an account with that email exists, a reset link has been sent.",
       });
     }
 
@@ -238,8 +242,9 @@ router.post("/forgot-password", async (req, res) => {
     // For now, just return success message
     console.log(`Password reset requested for: ${email}`);
 
-    res.json({ 
-      message: "If an account with that email exists, a reset link has been sent." 
+    res.json({
+      message:
+        "If an account with that email exists, a reset link has been sent.",
     });
   } catch (err) {
     console.error("Password reset error:", err);
@@ -253,27 +258,29 @@ router.post("/forgot-password", async (req, res) => {
 const authMiddleware = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader) {
-      return res.status(401).json({ message: "No authorization header provided" });
+      return res
+        .status(401)
+        .json({ message: "No authorization header provided" });
     }
 
     const token = authHeader.split(" ")[1];
-    
+
     if (!token) {
       return res.status(401).json({ message: "No token provided" });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.userId = decoded.id;
-    
+
     next();
   } catch (err) {
     console.error("Auth middleware error:", err);
-    if (err.name === 'TokenExpiredError') {
+    if (err.name === "TokenExpiredError") {
       return res.status(401).json({ message: "Token expired" });
     }
-    if (err.name === 'JsonWebTokenError') {
+    if (err.name === "JsonWebTokenError") {
       return res.status(401).json({ message: "Invalid token" });
     }
     res.status(401).json({ message: "Token verification failed" });
@@ -286,36 +293,38 @@ const authMiddleware = (req, res, next) => {
 router.get("/me", async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader) {
-      return res.status(401).json({ message: "No authorization header provided" });
+      return res
+        .status(401)
+        .json({ message: "No authorization header provided" });
     }
 
     const token = authHeader.split(" ")[1];
-    
+
     if (!token) {
       return res.status(401).json({ message: "No token provided" });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id).select("-password");
-    
-    console.log('User fetched from DB:', user?.email); 
-    
+
+    console.log("User fetched from DB:", user?.email);
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    
+
     res.json({
       success: true,
-      user: createUserResponse(user)
+      user: createUserResponse(user),
     });
   } catch (err) {
     console.error("Get current user error:", err);
-    if (err.name === 'TokenExpiredError') {
+    if (err.name === "TokenExpiredError") {
       return res.status(401).json({ message: "Token expired" });
     }
-    if (err.name === 'JsonWebTokenError') {
+    if (err.name === "JsonWebTokenError") {
       return res.status(401).json({ message: "Invalid token" });
     }
     res.status(401).json({ message: "Token verification failed" });
@@ -332,11 +341,11 @@ router.post("/logout", authMiddleware, (req, res) => {
         console.error("Logout error:", err);
         return res.status(500).json({ message: "Error during logout" });
       }
-      
+
       console.log(`User logged out: ${req.userId}`);
-      res.json({ 
-        success: true, 
-        message: "Logged out successfully" 
+      res.json({
+        success: true,
+        message: "Logged out successfully",
       });
     });
   } catch (err) {
@@ -351,24 +360,27 @@ router.post("/logout", authMiddleware, (req, res) => {
 router.post("/refresh-token", async (req, res) => {
   try {
     const { refreshToken } = req.body;
-    
+
     if (!refreshToken) {
       return res.status(401).json({ message: "Refresh token required" });
     }
 
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);
+    const decoded = jwt.verify(
+      refreshToken,
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET
+    );
     const user = await User.findById(decoded.id).select("-password");
-    
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
     const newToken = createToken(user._id);
-    
-    res.json({ 
+
+    res.json({
       success: true,
       token: newToken,
-      user: createUserResponse(user)
+      user: createUserResponse(user),
     });
   } catch (err) {
     console.error("Token refresh error:", err);
@@ -382,7 +394,7 @@ router.post("/refresh-token", async (req, res) => {
 router.get("/status", authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select("-password");
-    
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -397,8 +409,8 @@ router.get("/status", authMiddleware, async (req, res) => {
         availablePoints: dashboard?.availablePoints || 0,
         totalContacts: dashboard?.totalContacts || 0,
         unlockedProfiles: dashboard?.unlockedProfiles || 0,
-        myUploads: dashboard?.myUploads || 0
-      }
+        myUploads: dashboard?.myUploads || 0,
+      },
     });
   } catch (err) {
     console.error("Auth status error:", err);
