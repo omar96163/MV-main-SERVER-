@@ -1,70 +1,73 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const dotenv = require('dotenv');
-const cors = require('cors');
-const session = require('express-session');
-const passport = require('passport');
-const path = require('path');
+const express = require("express");
+const mongoose = require("mongoose");
+const dotenv = require("dotenv");
+const cors = require("cors");
+const session = require("express-session");
+const passport = require("passport");
+const path = require("path");
 
 dotenv.config();
-require('./models/passport'); 
+require("./models/passport");
 
-const app = express(); 
+const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Environment configuration
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = process.env.NODE_ENV === "production";
 
 // CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = [
-      'https://contactpro-hrmanager.vercel.app',
-      'https://mv-main-client.vercel.app',
-      'https://dalilyai.com'
+      "https://contactpro-hrmanager.vercel.app",
+      "https://mv-main-client.vercel.app",
+      "https://dalilyai.com",
     ];
-    
+
     if (process.env.FRONTEND_URL) {
       allowedOrigins.push(process.env.FRONTEND_URL);
     }
-    
+
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
-    
+
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error("Not allowed by CORS"));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  optionsSuccessStatus: 200
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  optionsSuccessStatus: 200,
 };
 
 // Trust proxy for Vercel
 if (isProduction) {
-  app.set('trust proxy', 1);
+  app.set("trust proxy", 1);
 }
 
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Session configuration with more robust settings
-app.use(session({
-  secret: process.env.SESSION_SECRET || "fallback-secret-key-change-in-production",
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: isProduction,
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: isProduction ? 'none' : 'lax'
-  },
-  name: 'sessionId'
-}));
+app.use(
+  session({
+    secret:
+      process.env.SESSION_SECRET || "fallback-secret-key-change-in-production",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: isProduction,
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: isProduction ? "none" : "lax",
+    },
+    name: "sessionId",
+  })
+);
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -76,65 +79,67 @@ app.use((req, res, next) => {
 });
 
 // Health check routes
-app.get('/', (req, res) => {
-  res.json({ 
-    message: 'ContactPro API is running!',
+app.get("/", (req, res) => {
+  res.json({
+    message: "ContactPro API is running!",
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    version: '1.0.0'
+    environment: process.env.NODE_ENV || "development",
+    version: "1.0.0",
   });
 });
 
-app.get('/health', (req, res) => { 
-  res.status(200).json({ 
-    status: 'healthy', 
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "healthy",
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    database:
+      mongoose.connection.readyState === 1 ? "connected" : "disconnected",
   });
 });
 
-const dashboardRoutes = require('./routes/dashboardRoutes');
+const dashboardRoutes = require("./routes/dashboardRoutes");
 
 // API Routes with error boundary
 try {
-  app.use('/auth', require('./routes/auth'));
-  app.use('/api/dashboard', dashboardRoutes);
-  app.use('/profiles', require('./routes/profileRoutes'));
-  
+  app.use("/auth", require("./routes/auth"));
+  app.use("/api/dashboard", dashboardRoutes);
+  app.use("/profiles", require("./routes/profileRoutes"));
+
   // NEW: LinkedIn scraper routes
-  app.use('/api', require('./routes/linkedinScraper'));
-  
+  app.use("/api", require("./routes/linkedinScraper"));
 } catch (routeError) {
-  console.error('Route loading error:', routeError);
+  console.error("Route loading error:", routeError);
 }
 
 // Global error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Global error handler:', {
+  console.error("Global error handler:", {
     error: err.message,
     stack: err.stack,
     path: req.path,
-    method: req.method
+    method: req.method,
   });
-  
-  res.status(err.status || 500).json({ 
-    message: isProduction ? 'Internal server error' : err.message,
-    error: isProduction ? {} : {
-      message: err.message,
-      stack: err.stack
-    }
+
+  res.status(err.status || 500).json({
+    message: isProduction ? "Internal server error" : err.message,
+    error: isProduction
+      ? {}
+      : {
+          message: err.message,
+          stack: err.stack,
+        },
   });
 });
 
 // 404 handler - FIXED for Express 5.x compatibility
 // Changed from '*' to '/:catchAll*' to provide a parameter name
-app.use('/:catchAll*', (req, res) => {
+app.use("/:catchAll*", (req, res) => {
   console.log(`404 - Route not found: ${req.method} ${req.originalUrl}`);
-  res.status(404).json({ 
-    message: 'Route not found',
+  res.status(404).json({
+    message: "Route not found",
     path: req.originalUrl,
-    method: req.method
+    method: req.method,
   });
 });
 
@@ -142,7 +147,7 @@ app.use('/:catchAll*', (req, res) => {
 const connectDB = async () => {
   try {
     if (!process.env.MONGO_URI) {
-      throw new Error('MONGO_URI environment variable is not set');
+      throw new Error("MONGO_URI environment variable is not set");
     }
 
     const options = {
@@ -153,25 +158,24 @@ const connectDB = async () => {
     };
 
     await mongoose.connect(process.env.MONGO_URI, options);
-    console.log('✅ Connected to MongoDB');
-    
+    console.log("✅ Connected to MongoDB");
+
     // Handle connection events
-    mongoose.connection.on('error', (err) => {
-      console.error('❌ MongoDB connection error:', err);
-    });
-    
-    mongoose.connection.on('disconnected', () => {
-      console.warn('⚠️ MongoDB disconnected');
+    mongoose.connection.on("error", (err) => {
+      console.error("❌ MongoDB connection error:", err);
     });
 
+    mongoose.connection.on("disconnected", () => {
+      console.warn("⚠️ MongoDB disconnected");
+    });
   } catch (error) {
-    console.error('❌ MongoDB connection failed:', error.message);
-    
+    console.error("❌ MongoDB connection failed:", error.message);
+
     // Don't exit in production to allow container restart
     if (!isProduction) {
       process.exit(1);
     }
-    
+
     // Retry connection after delay in production
     setTimeout(connectDB, 5000);
   }
@@ -179,32 +183,34 @@ const connectDB = async () => {
 
 // Graceful shutdown handling
 const gracefulShutdown = () => {
-  console.log('🛑 Received shutdown signal, closing server gracefully...');
-  
+  console.log("🛑 Received shutdown signal, closing server gracefully...");
+
   mongoose.connection.close(() => {
-    console.log('📦 MongoDB connection closed');
+    console.log("📦 MongoDB connection closed");
     process.exit(0);
   });
 };
 
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
+process.on("SIGTERM", gracefulShutdown);
+process.on("SIGINT", gracefulShutdown);
 
 // Start server
 const startServer = async () => {
   try {
     await connectDB();
-    
+
     if (!isProduction) {
       const server = app.listen(PORT, () => {
         console.log(`🚀 Server running on http://localhost:${PORT}`);
         console.log(`📊 Dashboard API: http://localhost:${PORT}/api/dashboard`);
         console.log(`👥 Profiles API: http://localhost:${PORT}/profiles`);
-        console.log(`🔗 LinkedIn Scraper API: http://localhost:${PORT}/api/scrape-linkedin`);
+        console.log(
+          `🔗 LinkedIn Scraper API: http://localhost:${PORT}/api/scrape-linkedin`
+        );
       });
-      
-      server.on('error', (err) => {
-        if (err.code === 'EADDRINUSE') {
+
+      server.on("error", (err) => {
+        if (err.code === "EADDRINUSE") {
           console.error(`❌ Port ${PORT} is already in use`);
           process.exit(1);
         }
@@ -212,7 +218,7 @@ const startServer = async () => {
       });
     }
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    console.error("❌ Failed to start server:", error);
     process.exit(1);
   }
 };
