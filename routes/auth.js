@@ -4,6 +4,8 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Dashboard = require("../models/Dashboard");
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
+const Nodemailer = require("nodemailer");
 
 const router = express.Router();
 
@@ -32,6 +34,26 @@ const createUserResponse = (user) => {
     avatar: user.avatar || null,
     googleId: user.googleId || null,
   };
+};
+
+// Nodemailer
+const sendEmail = async (options) => {
+  const transporter = Nodemailer.createTransport({
+    host: process.env.EMAIL_HOST,
+    port: process.env.EMAIL_PORT,
+    secure: true,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
+  const emailOptions = {
+    from: "dalily_ai <omaralbaz321@gmail.com>",
+    to: options.email,
+    subject: options.subject,
+    text: options.text,
+  };
+  await transporter.sendMail(emailOptions);
 };
 
 // =========================
@@ -219,7 +241,7 @@ router.get(
 );
 
 // =========================
-// Password Reset (Optional)
+// forgot-password-and-send-Email
 // =========================
 router.post("/forgot-password", async (req, res) => {
   try {
@@ -231,23 +253,101 @@ router.post("/forgot-password", async (req, res) => {
 
     const user = await User.findOne({ email: email.toLowerCase().trim() });
     if (!user) {
-      // Don't reveal if email exists for security
+      // Security: don't reveal if email exists
       return res.json({
         message:
           "If an account with that email exists, a reset link has been sent.",
       });
     }
 
-    // TODO: Implement email sending logic here
-    // For now, just return success message
-    console.log(`Password reset requested for: ${email}`);
+    // Generate secure reset token
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedResetCode = crypto
+      .createHash("sha256")
+      .update(resetCode)
+      .digest("hex");
 
-    res.json({
+    // Save hashed code and expiry to DB
+    user.resetPasswordCode = hashedResetCode;
+    user.resetPasswordExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    user.resetPasswordVerified = false;
+
+    await user.save();
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: "your pass reset code (valid for 10 mins)",
+        text: `Hi ${user.name},
+
+You requested to reset your password for Dalily.ai.
+
+Your 6-digit verification code is: ${resetCode}
+
+This code expires in 10 minutes.
+
+If you didn't request this, please ignore this email.
+
+— The Dalily.ai Team`,
+      });
+    } catch (err) {
+      user.resetPasswordCode = undefined;
+      user.resetPasswordExpires = undefined;
+      user.resetPasswordVerified = undefined;
+      await user.save();
+      return res.status(500).json({
+        message: `${err.message}`,
+      });
+    }
+
+    res.status(200).json({
       message:
-        "If an account with that email exists, a reset link has been sent.",
+        "If an account with that email exists, a reset code has been sent.",
     });
   } catch (err) {
     console.error("Password reset error:", err);
+    res.status(500).json({ message: "Failed to send reset email" });
+  }
+});
+
+// =========================
+// verify-code-and-reset-password
+// =========================
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { resetCode, newPassword } = req.body;
+
+    if (!resetCode || !newPassword) {
+      return res
+        .status(400)
+        .json({ message: "Reset code and new password are required" });
+    }
+
+    const hashedCode = crypto
+      .createHash("sha256")
+      .update(resetCode)
+      .digest("hex");
+
+    const user = await User.findOne({
+      resetPasswordCode: hashedCode,
+      resetPasswordExpires: { $gt: Date.now() },
+      resetPasswordVerified: false,
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: "Invalid or expired reset code" });
+    }
+
+    // Update password and mark as verified
+    user.password = await bcrypt.hash(newPassword, 12);
+    user.resetPasswordCode = undefined;
+    user.resetPasswordExpires = undefined;
+    user.resetPasswordVerified = undefined;
+    await user.save();
+
+    res.json({ message: "Password has been reset successfully" });
+  } catch (err) {
+    console.error("Reset password error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });

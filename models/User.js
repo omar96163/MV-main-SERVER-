@@ -5,7 +5,10 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, unique: true, sparse: true },
   password: String,
   googleId: String,
-  avatar: String
+  avatar: String,
+  resetPasswordCode: String,
+  resetPasswordExpires: Date,
+  resetPasswordVerified: Boolean,
 });
 
 module.exports = mongoose.model("User", UserSchema);
