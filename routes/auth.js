@@ -48,7 +48,7 @@ const sendEmail = async (options) => {
     },
   });
   const emailOptions = {
-    from: "dalily_ai <omaralbaz321@gmail.com>",
+    from: "Dalily_ai <omaralbaz321@gmail.com>",
     to: options.email,
     subject: options.subject,
     text: options.text,
@@ -278,17 +278,7 @@ router.post("/forgot-password", async (req, res) => {
       await sendEmail({
         email: user.email,
         subject: "your pass reset code (valid for 10 mins)",
-        text: `Hi ${user.name},
-
-You requested to reset your password for Dalily.ai.
-
-Your 6-digit verification code is: ${resetCode}
-
-This code expires in 10 minutes.
-
-If you didn't request this, please ignore this email.
-
-— The Dalily.ai Team`,
+        text: `Hi ${user.name},\nYou requested to reset your password for Dalily.ai.\nYour 6-digit verification code is: ${resetCode}\nThis code expires in 10 minutes.\nIf you didn't request this, please ignore this email.\n— The Dalily.ai Team`,
       });
     } catch (err) {
       user.resetPasswordCode = undefined;
