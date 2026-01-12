@@ -313,6 +313,12 @@ router.post("/reset-password", async (req, res) => {
         .json({ message: "Reset code and new password are required" });
     }
 
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        message: "Password must be at least 6 characters long",
+      });
+    }
+
     const hashedCode = crypto
       .createHash("sha256")
       .update(resetCode)
