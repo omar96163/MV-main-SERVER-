@@ -56,74 +56,132 @@ const sendEmail = async (options) => {
   await transporter.sendMail(emailOptions);
 };
 
-// =========================
-// Email/Password Signup
-// =========================
-router.post("/signup", async (req, res) => {
+// ==============================
+// Email/Password request-signup
+// ==============================
+router.post("/request-signup", async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    // Input validation
     if (!name || !email || !password) {
-      return res.status(400).json({
-        message: "Please provide name, email, and password",
-      });
+      return res.status(400).json({ message: "Please provide all fields" });
     }
 
     if (password.length < 6) {
-      return res.status(400).json({
-        message: "Password must be at least 6 characters long",
-      });
-    }
-
-    // Check if user already exists
-    let existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
       return res
         .status(400)
-        .json({ message: "User already exists with this email" });
+        .json({ message: "Password must be at least 6 characters" });
     }
 
-    // Hash password
-    const saltRounds = process.env.NODE_ENV === "production" ? 12 : 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // Create user
-    const user = await User.create({
-      name: name.trim(),
+    // تحقق من عدم وجود حساب مفعل بنفس الإيميل
+    const existingActiveUser = await User.findOne({
       email: email.toLowerCase().trim(),
-      password: hashedPassword,
+      isVerified: true,
+    });
+    if (existingActiveUser) {
+      return res.status(400).json({ message: "Email already registered" });
+    }
+
+    // تحقق من وجود طلب تسجيل سابق (لم ينتهِ)
+    let pendingUser = await User.findOne({
+      email: email.toLowerCase().trim(),
+      isVerified: false,
     });
 
-    // Create dashboard for new user (defaults handled in model)
+    const verificationCode = Math.floor(
+      100000 + Math.random() * 900000
+    ).toString();
+    const hashedCode = crypto
+      .createHash("sha256")
+      .update(verificationCode)
+      .digest("hex");
+
+    const userData = {
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      password: await bcrypt.hash(password, 10),
+      isVerified: false,
+      verificationCode: hashedCode,
+      verificationExpires: Date.now() + 10 * 60 * 1000, // 10 دقائق
+    };
+
+    if (pendingUser) {
+      // تحديث الطلب السابق
+      Object.assign(pendingUser, userData);
+      await pendingUser.save();
+    } else {
+      // إنشاء طلب جديد
+      pendingUser = await User.create(userData);
+    }
+
+    // إرسال الكود
+    await sendEmail({
+      email: userData.email,
+      subject: "Verify Your Dalily.ai Account",
+      text: `Hi ${userData.name},\n\nYour verification code is: ${verificationCode}\n\nThis code expires in 10 minutes.`,
+    });
+
+    res.json({ message: "Verification code sent to your email." });
+  } catch (err) {
+    console.error("Request signup error:", err);
+    res.status(500).json({ message: "Failed to send verification code" });
+  }
+});
+
+// ==============================
+// Email/Password verify-signup
+// ==============================
+router.post("/verify-signup", async (req, res) => {
+  try {
+    const { email, verificationCode } = req.body;
+
+    if (!email || !verificationCode) {
+      return res
+        .status(400)
+        .json({ message: "Email and verification code are required" });
+    }
+
+    const hashedCode = crypto
+      .createHash("sha256")
+      .update(verificationCode)
+      .digest("hex");
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+      verificationCode: hashedCode,
+      verificationExpires: { $gt: Date.now() },
+      isVerified: false,
+    });
+
+    if (!user) {
+      return res
+        .status(400)
+        .json({ message: "Invalid or expired verification code" });
+    }
+
+    // تفعيل الحساب
+    user.isVerified = true;
+    user.verificationCode = undefined;
+    user.verificationExpires = undefined;
+    await user.save();
+
+    // إنشاء الداشبورد
     await Dashboard.create({
       userId: user._id,
       availablePoints: 100,
-      totalContacts: 0,
-      unlockedProfiles: 0,
-      myUploads: 0,
-      uploadedProfileIds: [],
-      unlockedContactIds: [],
-      recentActivity: [`Welcome to the platform! You started with 100 points.`],
+      recentActivity: ["Welcome to Dalily.ai! Your account is now active."],
     });
 
-    // Create token
     const token = createToken(user._id);
 
-    console.log(`New user registered: ${user.email}`);
-
-    res.status(201).json({
+    res.json({
       success: true,
-      message: "Account created successfully",
+      message: "Account verified successfully",
       user: createUserResponse(user),
       token,
     });
   } catch (err) {
-    console.error("Signup error:", err);
-    res.status(500).json({
-      message: "Server error during registration",
-      error: process.env.NODE_ENV === "development" ? err.message : undefined,
-    });
+    console.error("Verify signup error:", err);
+    res.status(500).json({ message: "Verification failed" });
   }
 });
 
