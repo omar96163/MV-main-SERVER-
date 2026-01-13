@@ -10,7 +10,7 @@ const UserSchema = new mongoose.Schema({
   resetPasswordExpires: Date,
   resetPasswordVerified: Boolean,
   isVerified: { type: Boolean, default: false },
-  verificationCode: String, 
+  verificationCode: String,
   verificationExpires: Date,
 });
 
