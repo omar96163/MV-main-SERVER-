@@ -2,9 +2,18 @@ const mongoose = require("mongoose");
 
 const UserSchema = new mongoose.Schema({
   name: String,
-  email: { type: String, unique: true, sparse: true },
+  email: {
+    type: String,
+    unique: true,
+    sparse: true,
+    lowercase: true,
+    trim: true,
+  },
+  googleId: {
+    type: String,
+    index: true,
+  },
   password: String,
-  googleId: String,
   avatar: String,
   resetPasswordCode: String,
   resetPasswordExpires: Date,

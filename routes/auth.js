@@ -1,11 +1,11 @@
-const express = require("express");
-const passport = require("passport");
-const jwt = require("jsonwebtoken");
-const User = require("../models/User");
-const Dashboard = require("../models/Dashboard");
-const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
+const express = require("express");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const passport = require("passport");
+const User = require("../models/User");
 const Nodemailer = require("nodemailer");
+const Dashboard = require("../models/Dashboard");
 
 const router = express.Router();
 
@@ -48,7 +48,7 @@ const sendEmail = async (options) => {
     },
   });
   const emailOptions = {
-    from: "Dalily_ai <omaralbaz321@gmail.com>",
+    from: "Dalily_ai <dalilyai.com@gmail.com>",
     to: options.email,
     subject: options.subject,
     text: options.text,
@@ -248,57 +248,6 @@ router.post("/login", async (req, res) => {
 });
 
 // =========================
-// Google Auth Routes
-// =========================
-router.get("/google", (req, res, next) => {
-  console.log("Google auth initiated");
-  passport.authenticate("google", {
-    scope: ["profile", "email"],
-    prompt: "select_account", // Allow users to choose account
-  })(req, res, next);
-});
-
-router.get(
-  "/google/callback",
-  passport.authenticate("google", {
-    failureRedirect: getRedirectURL("/login?error=google_auth_failed"),
-    session: true,
-  }),
-  async (req, res) => {
-    try {
-      console.log("Google callback received for user:", req.user?.email);
-
-      if (!req.user) {
-        console.error("No user in Google callback");
-        return res.redirect(getRedirectURL("/login?error=no_user_data"));
-      }
-
-      // Ensure user has a dashboard
-      let dashboard = await Dashboard.findOne({ userId: req.user._id });
-      if (!dashboard) {
-        dashboard = await Dashboard.create({
-          userId: req.user._id,
-          availablePoints: 100,
-          recentActivity: [`Welcome! Signed up with Google.`],
-        });
-        console.log(`Dashboard created for Google user: ${req.user.email}`);
-      }
-
-      const token = createToken(req.user._id);
-
-      // Redirect with token
-      const redirectURL = getRedirectURL(`/google-success?token=${token}`);
-      console.log(`Redirecting to: ${redirectURL}`);
-
-      res.redirect(redirectURL);
-    } catch (err) {
-      console.error("Google callback error:", err);
-      res.redirect(getRedirectURL("/login?error=dashboard_creation_failed"));
-    }
-  }
-);
-
-// =========================
 // forgot-password-and-send-Email
 // =========================
 router.post("/forgot-password", async (req, res) => {
@@ -405,6 +354,51 @@ router.post("/reset-password", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+// =========================
+// Google Auth Routes
+// =========================
+router.get("/google", (req, res, next) => {
+  console.log("Google auth initiated");
+  passport.authenticate("google", {
+    session: false,
+    scope: ["profile", "email"],
+    prompt: "select_account", // Allow users to choose account
+  })(req, res, next);
+});
+
+router.get(
+  "/google/callback",
+  passport.authenticate("google", {
+    session: false,
+    failureRedirect: getRedirectURL("/"),
+  }),
+  (req, res) => {
+    const { token, user } = req.user;
+
+    if (!token || !user) {
+      console.error("Google auth failed: missing token or user");
+      return res.redirect(getRedirectURL("/"));
+    }
+
+    // تأكد أن الداشبورد موجود
+    Dashboard.findOne({ userId: user._id }).then((dashboard) => {
+      if (!dashboard) {
+        Dashboard.create({
+          userId: user._id,
+          availablePoints: 100,
+          recentActivity: ["Welcome! Signed up with Google."],
+        }).catch((err) => {
+          console.error("Failed to create dashboard:", err);
+        });
+      }
+    });
+
+    // ريدايركت مع التوكن
+    const redirectURL = getRedirectURL(`/google-success?token=${token}`);
+    res.redirect(redirectURL);
+  }
+);
 
 // =========================
 // Auth Middleware

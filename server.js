@@ -2,9 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const cors = require("cors");
-const session = require("express-session");
 const passport = require("passport");
-const path = require("path");
 
 dotenv.config();
 require("./models/passport");
@@ -51,26 +49,7 @@ if (isProduction) {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-
-// Session configuration with more robust settings
-app.use(
-  session({
-    secret:
-      process.env.SESSION_SECRET || "fallback-secret-key-change-in-production",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: isProduction,
-      httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      sameSite: isProduction ? "none" : "lax",
-    },
-    name: "sessionId",
-  })
-);
-
 app.use(passport.initialize());
-app.use(passport.session());
 
 // Request logging middleware
 if (!isProduction) {
