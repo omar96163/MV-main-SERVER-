@@ -8,6 +8,33 @@ const router = express.Router();
 // GET all profiles - now includes user-specific unlock status
 router.get("/", async (req, res) => {
   try {
+    const { userId } = req.query; // Pass userId as query parameter
+
+    const profiles = await Profile.find().sort({ createdAt: -1 });
+
+    // If userId is provided, get their unlocked contacts
+    let userUnlockedIds = [];
+    if (userId) {
+      const userDashboard = await Dashboard.findOne({ userId });
+      userUnlockedIds = userDashboard?.unlockedContactIds || [];
+    }
+
+    res.json(
+      profiles.map((p) => ({
+        ...p.toObject(),
+        id: p._id.toString(),
+        // Set isUnlocked based on current user's unlocked list
+        isUnlocked: userUnlockedIds.includes(p._id.toString()),
+      }))
+    );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET all profiles for one user
+router.get("/mine", async (req, res) => {
+  try {
     const { userId } = req.query;
 
     if (!userId) {
