@@ -1,58 +1,90 @@
-const express = require('express');
-const Profile = require('../models/profile.js');
-const Dashboard = require('../models/Dashboard');
-const { checkLinkedInDuplicate } = require('../utils/linkedinHelper');
+const express = require("express");
+const Profile = require("../models/profile.js");
+const Dashboard = require("../models/Dashboard");
+const { checkLinkedInDuplicate } = require("../utils/linkedinHelper");
 
 const router = express.Router();
 
 // GET all profiles - now includes user-specific unlock status
-router.get('/', async (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const { userId } = req.query; // Pass userId as query parameter
-    
-    const profiles = await Profile.find().sort({ createdAt: -1 });
-    
-    // If userId is provided, get their unlocked contacts
-    let userUnlockedIds = [];
-    if (userId) {
-      const userDashboard = await Dashboard.findOne({ userId });
-      userUnlockedIds = userDashboard?.unlockedContactIds || [];
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({ error: "User ID is required" });
     }
-    
+
+    // 1. جيب الداشبورد بتاع المستخدم
+    const dashboard = await Dashboard.findOne({ userId });
+
+    if (!dashboard) {
+      return res.status(404).json({ error: "User dashboard not found" });
+    }
+
+    // 2. IDs البروفايلات اللي رفعها + اللي فتحها
+    const relevantIds = [
+      ...new Set([
+        ...dashboard.uploadedProfileIds,
+        ...dashboard.unlockedContactIds,
+      ]),
+    ];
+
+    if (relevantIds.length === 0) {
+      return res.json([]);
+    }
+
+    // 3. جيب البروفايلات دي من قاعدة البيانات
+    const profiles = await Profile.find({
+      _id: { $in: relevantIds },
+    }).sort({ uploadedAt: -1 });
+
+    // 4. رتب النتيجة علشان تظهر الـ uploaded أولًا
+    const uploadedSet = new Set(dashboard.uploadedProfileIds);
+    const sortedProfiles = profiles.sort((a, b) => {
+      const aIsUploaded = uploadedSet.has(a._id.toString());
+      const bIsUploaded = uploadedSet.has(b._id.toString());
+
+      if (aIsUploaded && !bIsUploaded) return -1;
+      if (!aIsUploaded && bIsUploaded) return 1;
+      return 0;
+    });
+
     res.json(
-      profiles.map(p => ({
+      sortedProfiles.map((p) => ({
         ...p.toObject(),
         id: p._id.toString(),
-        // Set isUnlocked based on current user's unlocked list
-        isUnlocked: userUnlockedIds.includes(p._id.toString())
+        isUnlocked: true, // كلهم مفتوحين أو مرفوعين
+        isOwnUpload: uploadedSet.has(p._id.toString()),
       }))
     );
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Error fetching user profiles:", err);
+    res.status(500).json({ error: "Failed to fetch profiles" });
   }
 });
 
 // GET single profile by ID - with user-specific unlock status
-router.get('/:id', async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
     const { userId } = req.query; // Pass userId as query parameter
-    
+
     const profile = await Profile.findById(req.params.id);
     if (!profile) {
-      return res.status(404).json({ error: 'Profile not found' });
+      return res.status(404).json({ error: "Profile not found" });
     }
-    
+
     // Check if this user has unlocked this profile
     let isUnlocked = false;
     if (userId) {
       const userDashboard = await Dashboard.findOne({ userId });
-      isUnlocked = userDashboard?.unlockedContactIds.includes(req.params.id) || false;
+      isUnlocked =
+        userDashboard?.unlockedContactIds.includes(req.params.id) || false;
     }
-    
+
     res.json({
       ...profile.toObject(),
       id: profile._id.toString(),
-      isUnlocked
+      isUnlocked,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -60,7 +92,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST unlock profile (deduct points and add to user's unlocked list)
-router.post('/:id/unlock', async (req, res) => {
+router.post("/:id/unlock", async (req, res) => {
   try {
     const { userId } = req.body; // User who wants to unlock
     const profileId = req.params.id;
@@ -68,26 +100,28 @@ router.post('/:id/unlock', async (req, res) => {
     // Check if profile exists
     const profile = await Profile.findById(profileId);
     if (!profile) {
-      return res.status(404).json({ error: 'Profile not found' });
+      return res.status(404).json({ error: "Profile not found" });
     }
 
     // Get user's dashboard
     const dashboard = await Dashboard.findOne({ userId });
     if (!dashboard) {
-      return res.status(404).json({ error: 'Dashboard not found' });
+      return res.status(404).json({ error: "Dashboard not found" });
     }
 
     // Check if user already unlocked this profile
     if (dashboard.unlockedContactIds.includes(profileId)) {
-      return res.status(400).json({ error: 'Profile already unlocked by this user' });
+      return res
+        .status(400)
+        .json({ error: "Profile already unlocked by this user" });
     }
 
     // Check if user has enough points
     if (dashboard.availablePoints < 20) {
-      return res.status(400).json({ 
-        error: 'Insufficient points',
+      return res.status(400).json({
+        error: "Insufficient points",
         required: 20,
-        available: dashboard.availablePoints
+        available: dashboard.availablePoints,
       });
     }
 
@@ -95,18 +129,18 @@ router.post('/:id/unlock', async (req, res) => {
     await Dashboard.findOneAndUpdate(
       { userId },
       {
-        $inc: { 
+        $inc: {
           availablePoints: -20,
-          unlockedProfiles: 1
+          unlockedProfiles: 1,
         },
-        $push: { 
+        $push: {
           unlockedContactIds: profileId, // Add to user's unlocked list
           recentActivity: {
-            $each: [`Unlocked contact: ${profile.name || 'Unknown'}`],
-            $slice: -10 // Keep only last 10 activities
-          }
+            $each: [`Unlocked contact: ${profile.name || "Unknown"}`],
+            $slice: -10, // Keep only last 10 activities
+          },
         },
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }
     );
 
@@ -118,28 +152,30 @@ router.post('/:id/unlock', async (req, res) => {
       profile: {
         ...profile.toObject(),
         id: profile._id.toString(),
-        isUnlocked: true // For this user, it's now unlocked
+        isUnlocked: true, // For this user, it's now unlocked
       },
       dashboard: updatedDashboard,
       pointsDeducted: 20,
-      remainingPoints: updatedDashboard.availablePoints
+      remainingPoints: updatedDashboard.availablePoints,
     });
-
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // POST new profile with dashboard update
-router.post('/', async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     // Check for LinkedIn URL duplicate
     if (req.body.linkedinUrl) {
-      const duplicate = await checkLinkedInDuplicate(req.body.linkedinUrl, Profile);
+      const duplicate = await checkLinkedInDuplicate(
+        req.body.linkedinUrl,
+        Profile
+      );
       if (duplicate) {
         return res.status(409).json({
-          error: 'Duplicate LinkedIn profile',
-          message: duplicate.message
+          error: "Duplicate LinkedIn profile",
+          message: duplicate.message,
         });
       }
     }
@@ -152,19 +188,19 @@ router.post('/', async (req, res) => {
       await Dashboard.findOneAndUpdate(
         { userId: req.body.uploadedBy },
         {
-          $inc: { 
+          $inc: {
             availablePoints: 10, // Add 10 points
-            totalContacts: 1,    // Increment contact count
-            myUploads: 1         // Increment uploads counter
+            totalContacts: 1, // Increment contact count
+            myUploads: 1, // Increment uploads counter
           },
-          $push: { 
+          $push: {
             uploadedProfileIds: profile._id.toString(),
             recentActivity: {
-              $each: [`Uploaded contact: ${req.body.name || 'Unknown'}`],
-              $slice: -10 // Keep only last 10 activities
-            }
+              $each: [`Uploaded contact: ${req.body.name || "Unknown"}`],
+              $slice: -10, // Keep only last 10 activities
+            },
           },
-          updatedAt: new Date()
+          updatedAt: new Date(),
         },
         { upsert: true } // Create dashboard if it doesn't exist
       );
@@ -173,7 +209,7 @@ router.post('/', async (req, res) => {
     res.json({
       ...profile.toObject(),
       id: profile._id.toString(),
-      isUnlocked: false // Default for new profiles
+      isUnlocked: false, // Default for new profiles
     });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -181,12 +217,12 @@ router.post('/', async (req, res) => {
 });
 
 // POST bulk profiles with dashboard update
-router.post('/bulk', async (req, res) => {
+router.post("/bulk", async (req, res) => {
   try {
     const { profiles, uploadedBy } = req.body;
-    
+
     if (!profiles || !Array.isArray(profiles)) {
-      return res.status(400).json({ error: 'Invalid profiles data' });
+      return res.status(400).json({ error: "Invalid profiles data" });
     }
 
     // Create all profiles (no global isUnlocked field)
@@ -195,25 +231,27 @@ router.post('/bulk', async (req, res) => {
     // Update dashboard for bulk upload
     if (uploadedBy) {
       const pointsToAdd = createdProfiles.length * 10;
-      const profileIds = createdProfiles.map(p => p._id.toString());
-      const activityMessages = createdProfiles.map(p => `Uploaded contact: ${p.name || 'Unknown'}`);
+      const profileIds = createdProfiles.map((p) => p._id.toString());
+      const activityMessages = createdProfiles.map(
+        (p) => `Uploaded contact: ${p.name || "Unknown"}`
+      );
 
       await Dashboard.findOneAndUpdate(
         { userId: uploadedBy },
         {
-          $inc: { 
+          $inc: {
             availablePoints: pointsToAdd,
             totalContacts: createdProfiles.length,
-            myUploads: createdProfiles.length
+            myUploads: createdProfiles.length,
           },
-          $push: { 
+          $push: {
             uploadedProfileIds: { $each: profileIds },
             recentActivity: {
               $each: activityMessages,
-              $slice: -10
-            }
+              $slice: -10,
+            },
           },
-          updatedAt: new Date()
+          updatedAt: new Date(),
         },
         { upsert: true }
       );
@@ -222,11 +260,11 @@ router.post('/bulk', async (req, res) => {
     res.json({
       success: true,
       count: createdProfiles.length,
-      profiles: createdProfiles.map(p => ({
+      profiles: createdProfiles.map((p) => ({
         ...p.toObject(),
         id: p._id.toString(),
-        isUnlocked: false // Default for new profiles
-      }))
+        isUnlocked: false, // Default for new profiles
+      })),
     });
   } catch (err) {
     res.status(400).json({ error: err.message });
