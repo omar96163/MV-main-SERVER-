@@ -48,7 +48,7 @@ const sendEmail = async (options) => {
     },
   });
   const emailOptions = {
-    from: "Dalily_ai <dalilyai.com@gmail.com>",
+    from: "Dalily_ai <dalilyaiweb@gmail.com>",
     to: options.email,
     subject: options.subject,
     text: options.text,
@@ -79,7 +79,7 @@ router.post("/request-signup", async (req, res) => {
       isVerified: true,
     });
     if (existingActiveUser) {
-      return res.status(400).json({ message: "Email already registered" });
+      return res.status(400).json({ message: "This email already exists" });
     }
 
     // تحقق من وجود طلب تسجيل سابق (لم ينتهِ)
@@ -118,7 +118,7 @@ router.post("/request-signup", async (req, res) => {
     await sendEmail({
       email: userData.email,
       subject: "Verify Your Dalily.ai Account",
-      text: `Hi ${userData.name},\n\nYour verification code is: ${verificationCode}\n\nThis code expires in 10 minutes.`,
+      text: `Hi ${userData.name},\nYour verification code is: ${verificationCode}\nThis code expires in 10 minutes.`,
     });
 
     res.json({ message: "Verification code sent to your email." });
@@ -141,30 +141,42 @@ router.post("/verify-signup", async (req, res) => {
         .json({ message: "Email and verification code are required" });
     }
 
-    const hashedCode = crypto
-      .createHash("sha256")
-      .update(verificationCode)
-      .digest("hex");
     const user = await User.findOne({
       email: email.toLowerCase().trim(),
-      verificationCode: hashedCode,
-      verificationExpires: { $gt: Date.now() },
       isVerified: false,
     });
 
-    if (!user) {
+    if (!user || !user.verificationCode || !user.verificationExpires) {
       return res
         .status(400)
         .json({ message: "Invalid or expired verification code" });
     }
 
-    // تفعيل الحساب
+    // ⏰ تحقق من الصلاحية
+    if (user.verificationExpires < Date.now()) {
+      return res
+        .status(400)
+        .json({ message: "Verification code expired. Please request a new one." });
+    }
+
+    // 🔐 تحقق من الكود
+    const hashedCode = crypto
+      .createHash("sha256")
+      .update(verificationCode)
+      .digest("hex");
+
+    if (hashedCode !== user.verificationCode) {
+      return res
+        .status(400)
+        .json({ message: "Invalid verification code" });
+    }
+
+    // ✅ تفعيل الحساب
     user.isVerified = true;
     user.verificationCode = undefined;
     user.verificationExpires = undefined;
     await user.save();
 
-    // إنشاء الداشبورد
     await Dashboard.create({
       userId: user._id,
       availablePoints: 100,
