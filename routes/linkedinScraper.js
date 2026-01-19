@@ -150,7 +150,7 @@ router.post('/scrape-linkedin', async (req, res) => {
           }
 
           // Save contact using the existing profiles API endpoint
-          const saveResponse = await fetch(`${process.env.BASE_URL || 'https://contactpro-backend.vercel.app'}/profiles`, {
+          const saveResponse = await fetch(`${process.env.BASE_URL || 'https://mv-main-server.vercel.app'}/profiles`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
