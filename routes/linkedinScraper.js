@@ -9,19 +9,19 @@ router.post('/scrape-linkedin', async (req, res) => {
 
     // Validate input
     if (!profilesData || !Array.isArray(profilesData) || profilesData.length === 0) {
-      return res.status(400).json({ 
-        error: 'ProfilesData array is required and cannot be empty' 
+      return res.status(400).json({
+        error: 'ProfilesData array is required and cannot be empty'
       });
     }
 
     if (!userId) {
-      return res.status(400).json({ 
-        error: 'User ID is required' 
+      return res.status(400).json({
+        error: 'User ID is required'
       });
     }
 
     // Validate and structure profile data
-    const validProfiles = profilesData.filter(profile => 
+    const validProfiles = profilesData.filter(profile =>
       profile.url && (profile.url.includes('linkedin.com/in/') || profile.url.includes('linkedin.com/pub/'))
     ).map(profile => ({
       url: profile.url.trim(),
@@ -31,16 +31,16 @@ router.post('/scrape-linkedin', async (req, res) => {
     }));
 
     if (validProfiles.length === 0) {
-      return res.status(400).json({ 
-        error: 'No valid LinkedIn URLs found' 
+      return res.status(400).json({
+        error: 'No valid LinkedIn URLs found'
       });
     }
 
     const apiToken = process.env.APIFY_API_KEY;
-    
+
     if (!apiToken) {
-      return res.status(500).json({ 
-        error: 'LinkedIn scraping service not configured' 
+      return res.status(500).json({
+        error: 'LinkedIn scraping service not configured'
       });
     }
 
@@ -58,7 +58,7 @@ router.post('/scrape-linkedin', async (req, res) => {
     try {
       // Start the Apify actor run with just URLs
       const urls = validProfiles.map(profile => ({ url: profile.url }));
-      
+
       const runResponse = await fetch(`https://api.apify.com/v2/acts/supreme_coder~linkedin-profile-scraper/runs?token=${apiToken}`, {
         method: 'POST',
         headers: {
@@ -88,9 +88,9 @@ router.post('/scrape-linkedin', async (req, res) => {
 
       while (runStatus === 'RUNNING' && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
-        
+
         const statusResponse = await fetch(`https://api.apify.com/v2/acts/supreme_coder~linkedin-profile-scraper/runs/${runId}?token=${apiToken}`);
-        
+
         if (!statusResponse.ok) {
           throw new Error('Failed to check scraping status');
         }
@@ -109,7 +109,7 @@ router.post('/scrape-linkedin', async (req, res) => {
       // Get the scraped data
       const datasetId = runData.data.defaultDatasetId;
       const itemsResponse = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}`);
-      
+
       if (!itemsResponse.ok) {
         throw new Error(`Failed to fetch scraping results: ${itemsResponse.status}`);
       }
@@ -134,9 +134,9 @@ router.post('/scrape-linkedin', async (req, res) => {
 
           // Check if profile has sufficient data
           const hasMinimumData = contactData.name && // Has a name
-                                (contactData.experience > 0 || // Has experience
-                                 contactData.company || // Or has a company
-                                 contactData.jobTitle); // Or has a job title
+            (contactData.experience > 0 || // Has experience
+              contactData.company || // Or has a company
+              contactData.jobTitle); // Or has a job title
 
           if (!hasMinimumData) {
             console.log('Profile skipped due to insufficient data:', {
@@ -166,9 +166,9 @@ router.post('/scrape-linkedin', async (req, res) => {
           const savedContact = await saveResponse.json();
 
           results.successful++;
-          results.results.push({ 
-            url: profileInput.url, 
-            status: 'success', 
+          results.results.push({
+            url: profileInput.url,
+            status: 'success',
             data: {
               name: contactData.name,
               jobTitle: contactData.jobTitle,
@@ -182,9 +182,9 @@ router.post('/scrape-linkedin', async (req, res) => {
         } catch (error) {
           console.error(`Error processing ${profileInput.url}:`, error);
           results.failed++;
-          results.results.push({ 
-            url: profileInput.url, 
-            status: 'failed', 
+          results.results.push({
+            url: profileInput.url,
+            status: 'failed',
             error: error.message
           });
         }
@@ -192,14 +192,14 @@ router.post('/scrape-linkedin', async (req, res) => {
 
     } catch (scrapingError) {
       console.error('Scraping service error:', scrapingError);
-      
+
       // Mark all URLs as failed if scraping service fails
       for (const profile of validProfiles) {
         results.processed++;
         results.failed++;
-        results.results.push({ 
-          url: profile.url, 
-          status: 'failed', 
+        results.results.push({
+          url: profile.url,
+          status: 'failed',
           error: 'LinkedIn scraping service failed'
         });
       }
@@ -226,9 +226,9 @@ router.post('/scrape-linkedin', async (req, res) => {
 
   } catch (error) {
     console.error('LinkedIn scraping API error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Internal server error',
-      message: error.message 
+      message: error.message
     });
   }
 });
@@ -251,38 +251,38 @@ function transformLinkedInDataWithPhone(linkedInProfile, userId, profileInput) {
         const company = position.companyName || position.company?.name || '';
         const description = position.description || '';
         const location = position.locationName || '';
-        
+
         // Format date range
         let dateRange = '';
         if (position.timePeriod) {
           const start = position.timePeriod.startDate;
           const end = position.timePeriod.endDate;
-          
+
           if (start) {
             const startMonth = start.month ? String(start.month).padStart(2, '0') : '';
             const startYear = start.year || '';
             const startStr = startMonth && startYear ? `${startMonth}/${startYear}` : startYear;
-            
+
             let endStr = 'Present';
             if (end) {
               const endMonth = end.month ? String(end.month).padStart(2, '0') : '';
               const endYear = end.year || '';
               endStr = endMonth && endYear ? `${endMonth}/${endYear}` : endYear;
             }
-            
+
             dateRange = ` (${startStr} - ${endStr})`;
           }
         }
-        
+
         let experienceText = `${title} at ${company}${dateRange}`;
         if (location) {
           experienceText += ` - ${location}`;
         }
-        
+
         if (description) {
           experienceText += `\n${description}`;
         }
-        
+
         return experienceText;
       })
       .join('\n\n---\n\n');
@@ -290,23 +290,23 @@ function transformLinkedInDataWithPhone(linkedInProfile, userId, profileInput) {
 
   // Extract skills from multiple sources: skills array, courses, and certifications
   let skills = [];
-  
+
   // Primary skills from skills array
   if (linkedInProfile.skills && Array.isArray(linkedInProfile.skills)) {
-    const primarySkills = linkedInProfile.skills.map(skill => 
+    const primarySkills = linkedInProfile.skills.map(skill =>
       typeof skill === 'string' ? skill : skill.name || skill.title || ''
     ).filter(skill => skill.trim());
     skills.push(...primarySkills);
   }
-  
+
   // Additional skills from courses
   if (linkedInProfile.courses && Array.isArray(linkedInProfile.courses)) {
-    const courseSkills = linkedInProfile.courses.map(course => 
+    const courseSkills = linkedInProfile.courses.map(course =>
       typeof course === 'string' ? course : course.name || course.title || ''
     ).filter(skill => skill.trim());
     skills.push(...courseSkills);
   }
-  
+
   // Additional skills from certifications
   if (linkedInProfile.certifications && Array.isArray(linkedInProfile.certifications)) {
     const certificationSkills = linkedInProfile.certifications
@@ -315,7 +315,7 @@ function transformLinkedInDataWithPhone(linkedInProfile, userId, profileInput) {
       .slice(0, 10); // Limit certifications to avoid too many skills
     skills.push(...certificationSkills);
   }
-  
+
   // Remove duplicates and limit total skills
   skills = [...new Set(skills)].slice(0, 25); // Remove duplicates and limit to 25 skills
 
@@ -327,7 +327,7 @@ function transformLinkedInDataWithPhone(linkedInProfile, userId, profileInput) {
         const degree = edu.degreeName || '';
         const field = edu.fieldOfStudy || '';
         const school = edu.schoolName || '';
-        
+
         let educationText = '';
         if (degree && field) {
           educationText = `${degree} in ${field}`;
@@ -336,11 +336,11 @@ function transformLinkedInDataWithPhone(linkedInProfile, userId, profileInput) {
         } else if (field) {
           educationText = field;
         }
-        
+
         if (school) {
           educationText += educationText ? ` at ${school}` : school;
         }
-        
+
         // Add time period if available
         if (edu.timePeriod) {
           const start = edu.timePeriod.startDate?.year;
@@ -350,7 +350,7 @@ function transformLinkedInDataWithPhone(linkedInProfile, userId, profileInput) {
             educationText += ` (${timeStr})`;
           }
         }
-        
+
         return educationText;
       })
       .filter(edu => edu.trim())
@@ -373,7 +373,7 @@ function transformLinkedInDataWithPhone(linkedInProfile, userId, profileInput) {
   if (linkedInProfile.positions && linkedInProfile.positions.length > 0) {
     // Find the earliest start date across all positions
     let earliestStartYear = null;
-    
+
     linkedInProfile.positions.forEach(position => {
       if (position.timePeriod && position.timePeriod.startDate && position.timePeriod.startDate.year) {
         if (!earliestStartYear || position.timePeriod.startDate.year < earliestStartYear) {
@@ -381,7 +381,7 @@ function transformLinkedInDataWithPhone(linkedInProfile, userId, profileInput) {
         }
       }
     });
-    
+
     if (earliestStartYear) {
       const currentYear = new Date().getFullYear();
       experienceYears = Math.max(0, currentYear - earliestStartYear);
@@ -392,7 +392,7 @@ function transformLinkedInDataWithPhone(linkedInProfile, userId, profileInput) {
   const jobTitle = linkedInProfile.jobTitle || linkedInProfile.occupation || linkedInProfile.positions?.[0]?.title || '';
   let seniorityLevel = 'Mid-level';
   const titleLower = jobTitle.toLowerCase();
-  
+
   if (titleLower.includes('ceo') || titleLower.includes('cto') || titleLower.includes('cfo') || titleLower.includes('chief')) {
     seniorityLevel = 'C-Level';
   } else if (titleLower.includes('vp') || titleLower.includes('vice president')) {
@@ -416,8 +416,8 @@ function transformLinkedInDataWithPhone(linkedInProfile, userId, profileInput) {
   }
 
   // Get location from profile or current position
-  const location = linkedInProfile.geoLocationName || linkedInProfile.geoCountryName || 
-                  linkedInProfile.positions?.[0]?.locationName || '';
+  const location = linkedInProfile.geoLocationName || linkedInProfile.geoCountryName ||
+    linkedInProfile.positions?.[0]?.locationName || '';
 
   // Use user-provided phone info as priority, fallback to LinkedIn data
   const finalPhone = profileInput.phone || linkedInProfile.phone || '';
