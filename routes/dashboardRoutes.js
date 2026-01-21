@@ -9,9 +9,9 @@ const router = express.Router();
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const userId = req.userId; // Get from auth middleware instead of params
-    
+
     let dashboard = await Dashboard.findOne({ userId });
-    
+
     // If no dashboard exists, create one with defaults
     if (!dashboard) {
       dashboard = await Dashboard.create({
@@ -29,7 +29,7 @@ router.get('/', authMiddleware, async (req, res) => {
     // Calculate actual stats from database to ensure accuracy
     const actualUploads = await Profile.countDocuments({ uploadedBy: userId });
     const actualUnlockedCount = dashboard.unlockedContactIds ? dashboard.unlockedContactIds.length : 0;
-    
+
     // Update dashboard with accurate counts if they don't match
     if (dashboard.myUploads !== actualUploads || dashboard.unlockedProfiles !== actualUnlockedCount) {
       dashboard.myUploads = actualUploads;
@@ -49,7 +49,7 @@ router.get('/', authMiddleware, async (req, res) => {
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const userId = req.userId; // Get from auth middleware
-    
+
     const updateData = {
       availablePoints: req.body.availablePoints,
       totalContacts: req.body.totalContacts,
@@ -73,7 +73,7 @@ router.post('/', authMiddleware, async (req, res) => {
       { $set: updateData },
       { new: true, upsert: true }
     );
-    
+
     res.json(dashboard);
   } catch (err) {
     console.error('Dashboard update error:', err);
@@ -85,17 +85,17 @@ router.post('/', authMiddleware, async (req, res) => {
 router.get('/unlocked', authMiddleware, async (req, res) => {
   try {
     const userId = req.userId;
-    
+
     const dashboard = await Dashboard.findOne({ userId });
     if (!dashboard) {
       return res.status(404).json({ error: 'Dashboard not found' });
     }
-    
+
     // Get detailed info about unlocked contacts
     const unlockedProfiles = await Profile.find({
       '_id': { $in: dashboard.unlockedContactIds || [] }
     }).select('name jobTitle company uploadedAt');
-    
+
     res.json({
       userId,
       unlockedContactIds: dashboard.unlockedContactIds || [],
@@ -113,19 +113,19 @@ router.get('/unlocked', authMiddleware, async (req, res) => {
 router.get('/activity', authMiddleware, async (req, res) => {
   try {
     const userId = req.userId;
-    
+
     const dashboard = await Dashboard.findOne({ userId });
     if (!dashboard) {
       return res.status(404).json({ error: 'Dashboard not found' });
     }
-    
+
     // Get detailed activity information
     const uploadedProfiles = await Profile.find({
       'uploadedBy': userId
     }).sort({ uploadedAt: -1 }).limit(10).select('name jobTitle company uploadedAt');
 
     const recentActivity = dashboard.recentActivity || [];
-    
+
     res.json({
       recentActivity: recentActivity.slice(-10).reverse(),
       uploadedProfiles,
@@ -143,7 +143,7 @@ router.patch('/activity', authMiddleware, async (req, res) => {
   try {
     const userId = req.userId;
     const { activity } = req.body;
-    
+
     if (!activity) {
       return res.status(400).json({ error: 'Activity message required' });
     }
