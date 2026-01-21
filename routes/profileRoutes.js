@@ -193,21 +193,6 @@ router.post("/:id/unlock", async (req, res) => {
 // POST new profile with dashboard update
 router.post("/", async (req, res) => {
   try {
-    // Check for LinkedIn URL duplicate
-    if (req.body.linkedinUrl) {
-      const duplicate = await checkLinkedInDuplicate(
-        req.body.linkedinUrl,
-        Profile
-      );
-      if (duplicate) {
-        return res.status(409).json({
-          error: "Duplicate LinkedIn profile",
-          message: duplicate.message,
-        });
-      }
-    }
-
-    // Create the profile (no global isUnlocked field)
     const profile = await Profile.create(req.body);
 
     // Update dashboard for the user who uploaded
@@ -216,27 +201,27 @@ router.post("/", async (req, res) => {
         { userId: req.body.uploadedBy },
         {
           $inc: {
-            availablePoints: 10, // Add 10 points
-            totalContacts: 1, // Increment contact count
-            myUploads: 1, // Increment uploads counter
+            availablePoints: 10,
+            totalContacts: 1,
+            myUploads: 1,
           },
           $push: {
             uploadedProfileIds: profile._id.toString(),
             recentActivity: {
               $each: [`Uploaded contact: ${req.body.name || "Unknown"}`],
-              $slice: -10, // Keep only last 10 activities
+              $slice: -10,
             },
           },
           updatedAt: new Date(),
         },
-        { upsert: true } // Create dashboard if it doesn't exist
+        { upsert: true }
       );
     }
 
     res.json({
       ...profile.toObject(),
       id: profile._id.toString(),
-      isUnlocked: false, // Default for new profiles
+      isUnlocked: false,
     });
   } catch (err) {
     res.status(400).json({ error: err.message });

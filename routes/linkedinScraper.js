@@ -1,235 +1,203 @@
-// routes/linkedinScraper.js - Updated to handle phone information only
-const express = require('express');
+const express = require("express");
+const Profile = require("../models/profile");
+const Dashboard = require("../models/Dashboard");
+const { extractLinkedInId } = require("../utils/linkedinHelper");
+
 const router = express.Router();
 
-// LinkedIn scraping endpoint
-router.post('/scrape-linkedin', async (req, res) => {
+router.post("/scrape-linkedin", async (req, res) => {
   try {
     const { profilesData, userId } = req.body;
 
     // Validate input
     if (!profilesData || !Array.isArray(profilesData) || profilesData.length === 0) {
-      return res.status(400).json({
-        error: 'ProfilesData array is required and cannot be empty'
-      });
+      return res.status(400).json({ error: "ProfilesData array is required" });
     }
 
     if (!userId) {
-      return res.status(400).json({
-        error: 'User ID is required'
-      });
+      return res.status(400).json({ error: "User ID is required" });
     }
 
     // Validate and structure profile data
-    const validProfiles = profilesData.filter(profile =>
-      profile.url && (profile.url.includes('linkedin.com/in/') || profile.url.includes('linkedin.com/pub/'))
-    ).map(profile => ({
-      url: profile.url.trim(),
-      phone: (profile.phone || '').trim(),
-      email: (profile.email || '').trim(),
-      extraLinks: Array.isArray(profile.extraLinks) ? profile.extraLinks.filter(Boolean) : []
-    }));
+    const validProfiles = profilesData
+      .filter(profile =>
+        profile.url && (profile.url.includes("linkedin.com/in/") || profile.url.includes("linkedin.com/pub/"))
+      )
+      .map(profile => ({
+        url: profile.url.trim(),
+        phone: (profile.phone || "").trim(),
+        email: (profile.email || "").trim(),
+        extraLinks: Array.isArray(profile.extraLinks) ? profile.extraLinks.filter(Boolean) : [],
+      }));
 
     if (validProfiles.length === 0) {
-      return res.status(400).json({
-        error: 'No valid LinkedIn URLs found'
-      });
+      return res.status(400).json({ error: "No valid LinkedIn URLs found" });
     }
 
     const apiToken = process.env.APIFY_API_KEY;
-
     if (!apiToken) {
-      return res.status(500).json({
-        error: 'LinkedIn scraping service not configured'
+      return res.status(500).json({ error: "LinkedIn scraping service not configured" });
+    }
+
+    // Start scraping
+    const urls = validProfiles.map(profile => ({ url: profile.url }));
+    const runResponse = await fetch(
+      `https://api.apify.com/v2/acts/supreme_coder~linkedin-profile-scraper/runs?token=${apiToken}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls }),
+      }
+    );
+
+    if (!runResponse.ok) {
+      throw new Error("Failed to start scraping");
+    }
+
+    const runData = await runResponse.json();
+    const runId = runData.data.id;
+
+    // Poll for completion
+    let runStatus = "RUNNING";
+    let attempts = 0;
+    const maxAttempts = 60;
+
+    while (runStatus === "RUNNING" && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      const statusResponse = await fetch(
+        `https://api.apify.com/v2/acts/supreme_coder~linkedin-profile-scraper/runs/${runId}?token=${apiToken}`
+      );
+      const statusData = await statusResponse.json();
+      runStatus = statusData.data.status;
+      attempts++;
+    }
+
+    if (runStatus !== "SUCCEEDED") {
+      throw new Error(`Scraping failed with status: ${runStatus}`);
+    }
+
+    // Get scraped data
+    const datasetId = runData.data.defaultDatasetId;
+    const itemsResponse = await fetch(
+      `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}`
+    );
+    const scrapedData = await itemsResponse.json();
+
+    // ← التحقق من Free Limit
+    if (scrapedData.length === 0) {
+      return res.status(429).json({
+        error: "Free limit exceeded. Please upgrade your Apify plan.",
+        message: "You've reached the free usage limit for LinkedIn scraping."
       });
     }
 
-    // Initialize results tracking
     const results = {
       total: validProfiles.length,
       processed: 0,
       successful: 0,
       failed: 0,
-      results: []
+      results: [],
     };
 
-    console.log(`Starting LinkedIn scraping for ${validProfiles.length} profiles with phone info`);
+    // Process each profile
+    for (let i = 0; i < validProfiles.length; i++) {
+      const profileInput = validProfiles[i];
+      const profileData = scrapedData[i];
 
-    try {
-      // Start the Apify actor run with just URLs
-      const urls = validProfiles.map(profile => ({ url: profile.url }));
-
-      const runResponse = await fetch(`https://api.apify.com/v2/acts/supreme_coder~linkedin-profile-scraper/runs?token=${apiToken}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          urls: urls,
-          "findContacts.contactCompassToken": ""
-        })
-      });
-
-      if (!runResponse.ok) {
-        const errorText = await runResponse.text();
-        console.error('Apify run failed:', runResponse.status, errorText);
-        throw new Error(`LinkedIn scraping service failed: ${runResponse.status}`);
-      }
-
-      const runData = await runResponse.json();
-      const runId = runData.data.id;
-
-      console.log(`Apify run started with ID: ${runId}`);
-
-      // Poll for completion
-      let runStatus = 'RUNNING';
-      let attempts = 0;
-      const maxAttempts = 60; // 3 minutes max wait time
-
-      while (runStatus === 'RUNNING' && attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
-
-        const statusResponse = await fetch(`https://api.apify.com/v2/acts/supreme_coder~linkedin-profile-scraper/runs/${runId}?token=${apiToken}`);
-
-        if (!statusResponse.ok) {
-          throw new Error('Failed to check scraping status');
-        }
-
-        const statusData = await statusResponse.json();
-        runStatus = statusData.data.status;
-        attempts++;
-
-        console.log(`Scraping status: ${runStatus} (attempt ${attempts})`);
-      }
-
-      if (runStatus !== 'SUCCEEDED') {
-        throw new Error(`Scraping failed with status: ${runStatus}`);
-      }
-
-      // Get the scraped data
-      const datasetId = runData.data.defaultDatasetId;
-      const itemsResponse = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}`);
-
-      if (!itemsResponse.ok) {
-        throw new Error(`Failed to fetch scraping results: ${itemsResponse.status}`);
-      }
-
-      const scrapedData = await itemsResponse.json();
-      console.log(`Received ${scrapedData.length} scraped profiles`);
-
-      // Process each scraped profile with the provided contact info
-      for (let i = 0; i < validProfiles.length; i++) {
-        const profileInput = validProfiles[i];
-        const profileData = scrapedData[i];
-
-        try {
-          results.processed++;
-
-          if (!profileData) {
-            throw new Error('No profile data received');
-          }
-
-          // Transform LinkedIn data to our contact format, including user-provided phone info
-          const contactData = transformLinkedInDataWithPhone(profileData, userId, profileInput);
-
-          // Check if profile has sufficient data
-          const hasMinimumData = contactData.name && // Has a name
-            (contactData.experience > 0 || // Has experience
-              contactData.company || // Or has a company
-              contactData.jobTitle); // Or has a job title
-
-          if (!hasMinimumData) {
-            console.log('Profile skipped due to insufficient data:', {
-              url: profileInput.url,
-              name: contactData.name,
-              experience: contactData.experience,
-              company: contactData.company,
-              jobTitle: contactData.jobTitle
-            });
-            throw new Error('Insufficient profile data - profile must have a name and either experience, company, or job title');
-          }
-
-          // Save contact using the existing profiles API endpoint
-          const saveResponse = await fetch(`${process.env.BASE_URL || 'https://mv-main-server.vercel.app'}/profiles`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(contactData)
-          });
-
-          if (!saveResponse.ok) {
-            const errorData = await saveResponse.json().catch(() => ({}));
-            throw new Error(errorData.message || `Failed to save contact: ${saveResponse.status}`);
-          }
-
-          const savedContact = await saveResponse.json();
-
-          results.successful++;
-          results.results.push({
-            url: profileInput.url,
-            status: 'success',
-            data: {
-              name: contactData.name,
-              jobTitle: contactData.jobTitle,
-              company: contactData.company,
-              phone: contactData.phone
-            }
-          });
-
-          console.log(`Successfully processed profile: ${contactData.name}`);
-
-        } catch (error) {
-          console.error(`Error processing ${profileInput.url}:`, error);
-          results.failed++;
-          results.results.push({
-            url: profileInput.url,
-            status: 'failed',
-            error: error.message
-          });
-        }
-      }
-
-    } catch (scrapingError) {
-      console.error('Scraping service error:', scrapingError);
-
-      // Mark all URLs as failed if scraping service fails
-      for (const profile of validProfiles) {
+      try {
         results.processed++;
+
+        if (!profileData) {
+          throw new Error("No profile data received");
+        }
+
+        const contactData = transformLinkedInDataWithPhone(profileData, userId, profileInput);
+
+        // Check minimum data
+        const hasMinimumData = contactData.name &&
+          (contactData.experience > 0 || contactData.company || contactData.jobTitle);
+
+        if (!hasMinimumData) {
+          throw new Error("Insufficient profile data");
+        }
+
+        // ← التحقق من التكرار
+        const linkedinId = extractLinkedInId(contactData.linkedinUrl);
+        let existingProfile = null;
+
+        if (linkedinId) {
+          existingProfile = await Profile.findOne({ linkedinId });
+        }
+
+        let pointsEarned = 0;
+        let savedContact = null;
+
+        if (existingProfile) {
+          // ← تحديث البروفايل القديم
+          Object.assign(existingProfile, contactData);
+          await existingProfile.save();
+          savedContact = existingProfile;
+          pointsEarned = 5; // 5 نقاط للتحديث
+        } else {
+          // ← إنشاء بروفايل جديد
+          savedContact = await Profile.create(contactData);
+          pointsEarned = 10; // 10 نقاط للبروفايل الجديد
+        }
+
+        // ← تحديث الداشبورد
+        const profileId = savedContact._id.toString();
+        await Dashboard.findOneAndUpdate(
+          { userId },
+          {
+            $inc: { availablePoints: pointsEarned },
+            $push: {
+              recentActivity: {
+                $each: [`Scraped LinkedIn profile: ${contactData.name}`],
+                $slice: -10,
+              }
+            },
+            $addToSet: {
+              unlockedContactIds: profileId,
+              ...(pointsEarned === 10 ? { uploadedProfileIds: profileId } : {})
+            },
+            updatedAt: new Date(),
+          },
+          { upsert: true }
+        );
+
+        results.successful++;
+        results.results.push({
+          url: profileInput.url,
+          status: "success",
+          pointsEarned,
+          data: {
+            name: contactData.name,
+            jobTitle: contactData.jobTitle,
+            company: contactData.company,
+          },
+        });
+
+      } catch (error) {
         results.failed++;
         results.results.push({
-          url: profile.url,
-          status: 'failed',
-          error: 'LinkedIn scraping service failed'
+          url: profileInput.url,
+          status: "failed",
+          error: error.message,
         });
       }
     }
 
-    // Update user points using API endpoint
-    if (results.successful > 0) {
-      try {
-        // You'll need to implement a user points update endpoint
-        // For now, we'll skip this or you can add it to your existing user routes
-        console.log(`Would add ${results.successful * 10} points to user ${userId}`);
-      } catch (pointsError) {
-        console.error('Error updating user points:', pointsError);
-        // Don't fail the entire operation for points update failure
-      }
-    }
-
-    // Return results
     res.json({
       success: true,
       results,
-      pointsEarned: results.successful * 10
+      totalPointsEarned: results.results
+        .filter(r => r.status === "success")
+        .reduce((sum, r) => sum + r.pointsEarned, 0),
     });
 
   } catch (error) {
-    console.error('LinkedIn scraping API error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: error.message
-    });
+    console.error("Scraping error:", error);
+    res.status(500).json({ error: "Internal server error", message: error.message });
   }
 });
 
