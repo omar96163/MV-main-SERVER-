@@ -8,7 +8,7 @@ const router = express.Router();
 // GET all profiles - now includes user-specific unlock status
 router.get("/", async (req, res) => {
   try {
-    const { userId } = req.query; // Pass userId as query parameter
+    const { userId } = req.query;
 
     const profiles = await Profile.find().sort({ createdAt: -1 });
 
@@ -93,7 +93,7 @@ router.get("/mine", async (req, res) => {
 // GET single profile by ID - with user-specific unlock status
 router.get("/:id", async (req, res) => {
   try {
-    const { userId } = req.query; // Pass userId as query parameter
+    const { userId } = req.query;
 
     const profile = await Profile.findById(req.params.id);
     if (!profile) {
@@ -121,7 +121,7 @@ router.get("/:id", async (req, res) => {
 // POST unlock profile (deduct points and add to user's unlocked list)
 router.post("/:id/unlock", async (req, res) => {
   try {
-    const { userId } = req.body; // User who wants to unlock
+    const { userId } = req.body;
     const profileId = req.params.id;
 
     // Check if profile exists
