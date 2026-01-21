@@ -104,9 +104,9 @@ app.use((err, req, res, next) => {
     error: isProduction
       ? {}
       : {
-          message: err.message,
-          stack: err.stack,
-        },
+        message: err.message,
+        stack: err.stack,
+      },
   });
 });
 
