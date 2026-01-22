@@ -146,13 +146,20 @@ router.post("/scrape-linkedin", async (req, res) => {
 
         // ← تحديث الداشبورد
         const profileId = savedContact._id.toString();
+        let activityText = "";
+
+        if (existingProfile) {
+          activityText = `Updated LinkedIn profile: ${contactData.name || "Unknown"}`;
+        } else {
+          activityText = `Uploaded LinkedIn profile: ${contactData.name || "Unknown"}`;
+        }
         await Dashboard.findOneAndUpdate(
           { userId },
           {
             $inc: { availablePoints: pointsEarned },
             $push: {
               recentActivity: {
-                $each: [`Scraped LinkedIn profile: ${contactData.name}`],
+                $each: [activityText],
                 $slice: -10,
               }
             },

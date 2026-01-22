@@ -1,7 +1,6 @@
 const express = require("express");
 const Profile = require("../models/profile.js");
 const Dashboard = require("../models/Dashboard");
-const { checkLinkedInDuplicate } = require("../utils/linkedinHelper");
 
 const router = express.Router();
 
@@ -163,7 +162,7 @@ router.post("/:id/unlock", async (req, res) => {
         $push: {
           unlockedContactIds: profileId, // Add to user's unlocked list
           recentActivity: {
-            $each: [`Unlocked contact: ${profile.name || "Unknown"}`],
+            $each: [`Unlocked LinkedIn profile: ${profile.name || "Unknown"}`],
             $slice: -10, // Keep only last 10 activities
           },
         },
