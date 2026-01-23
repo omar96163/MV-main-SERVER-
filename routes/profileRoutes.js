@@ -15,7 +15,7 @@ router.get("/", async (req, res) => {
     let userUnlockedIds = [];
     if (userId) {
       const userDashboard = await Dashboard.findOne({ userId });
-      userUnlockedIds = userDashboard?.unlockedContactIds || [];
+      userUnlockedIds = userDashboard?.unlockedProfileIds || [];
     }
 
     res.json(
@@ -51,7 +51,7 @@ router.get("/mine", async (req, res) => {
     const relevantIds = [
       ...new Set([
         ...dashboard.uploadedProfileIds,
-        ...dashboard.unlockedContactIds,
+        ...dashboard.unlockedProfileIds,
       ]),
     ];
 
@@ -104,7 +104,7 @@ router.get("/:id", async (req, res) => {
     if (userId) {
       const userDashboard = await Dashboard.findOne({ userId });
       isUnlocked =
-        userDashboard?.unlockedContactIds.includes(req.params.id) || false;
+        userDashboard?.unlockedProfileIds.includes(req.params.id) || false;
     }
 
     res.json({
@@ -136,7 +136,7 @@ router.post("/:id/unlock", async (req, res) => {
     }
 
     // Check if user already unlocked this profile
-    if (dashboard.unlockedContactIds.includes(profileId)) {
+    if (dashboard.unlockedProfileIds.includes(profileId)) {
       return res
         .status(400)
         .json({ error: "Profile already unlocked by this user" });
@@ -157,10 +157,11 @@ router.post("/:id/unlock", async (req, res) => {
       {
         $inc: {
           availablePoints: -20,
+          totalContacts: 1,
           unlockedProfiles: 1,
         },
         $push: {
-          unlockedContactIds: profileId, // Add to user's unlocked list
+          unlockedProfileIds: profileId, // Add to user's unlocked list
           recentActivity: {
             $each: [`Unlocked LinkedIn profile: ${profile.name || "Unknown"}`],
             $slice: -10, // Keep only last 10 activities
@@ -202,7 +203,7 @@ router.post("/", async (req, res) => {
           $inc: {
             availablePoints: 10,
             totalContacts: 1,
-            myUploads: 1,
+            uploadedProfiles: 1,
           },
           $push: {
             uploadedProfileIds: profile._id.toString(),
@@ -253,7 +254,7 @@ router.post("/bulk", async (req, res) => {
           $inc: {
             availablePoints: pointsToAdd,
             totalContacts: createdProfiles.length,
-            myUploads: createdProfiles.length,
+            uploadedProfiles: createdProfiles.length,
           },
           $push: {
             uploadedProfileIds: { $each: profileIds },

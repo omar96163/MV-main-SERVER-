@@ -569,7 +569,7 @@ router.get("/status", authMiddleware, async (req, res) => {
         availablePoints: dashboard?.availablePoints || 0,
         totalContacts: dashboard?.totalContacts || 0,
         unlockedProfiles: dashboard?.unlockedProfiles || 0,
-        myUploads: dashboard?.myUploads || 0,
+        uploadedProfiles: dashboard?.uploadedProfiles || 0,
       },
     });
   } catch (err) {

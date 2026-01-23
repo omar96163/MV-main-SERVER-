@@ -164,7 +164,6 @@ router.post("/scrape-linkedin", async (req, res) => {
               }
             },
             $addToSet: {
-              unlockedContactIds: profileId,
               ...(pointsEarned === 10 ? { uploadedProfileIds: profileId } : {})
             },
             updatedAt: new Date(),
