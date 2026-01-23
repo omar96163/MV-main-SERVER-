@@ -27,10 +27,8 @@ router.get("/", authMiddleware, async (req, res) => {
     }
 
     // Calculate actual stats from database to ensure accuracy
-    const actualUploads = await Profile.countDocuments({ uploadedBy: userId });
-    const actualUnlockedCount = dashboard.unlockedProfileIds
-      ? dashboard.unlockedProfileIds.length
-      : 0;
+    const actualUploads = await dashboard.uploadedProfileIds ? dashboard.uploadedProfileIds.length : 0;
+    const actualUnlockedCount = dashboard.unlockedProfileIds ? dashboard.unlockedProfileIds.length : 0;
 
     // Update dashboard with accurate counts if they don't match
     if (
@@ -39,7 +37,7 @@ router.get("/", authMiddleware, async (req, res) => {
     ) {
       dashboard.uploadedProfiles = actualUploads;
       dashboard.unlockedProfiles = actualUnlockedCount;
-      dashboard.totalContacts = actualUploads;
+      dashboard.totalContacts = actualUploads + actualUnlockedCount;
       await dashboard.save();
     }
 

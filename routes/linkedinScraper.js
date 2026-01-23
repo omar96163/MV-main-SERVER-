@@ -111,7 +111,7 @@ router.post("/scrape-linkedin", async (req, res) => {
           throw new Error("No profile data received");
         }
 
-        const contactData = transformLinkedInDataWithPhone(profileData, userId, profileInput);
+        const contactData = transformLinkedInDataWithPhone(profileData, profileInput);
 
         // Check minimum data
         const hasMinimumData = contactData.name &&
@@ -140,6 +140,7 @@ router.post("/scrape-linkedin", async (req, res) => {
           pointsEarned = 5; // 5 نقاط للتحديث
         } else {
           // ← إنشاء بروفايل جديد
+          contactData.uploadedBy = userId;
           savedContact = await Profile.create(contactData);
           pointsEarned = 10; // 10 نقاط للبروفايل الجديد
         }
@@ -156,7 +157,10 @@ router.post("/scrape-linkedin", async (req, res) => {
         await Dashboard.findOneAndUpdate(
           { userId },
           {
-            $inc: { availablePoints: pointsEarned },
+            $inc: {
+              availablePoints: pointsEarned,
+              ...(pointsEarned === 10 ? { totalContacts: 1, uploadedProfiles: 1 } : undefined)
+            },
             $push: {
               recentActivity: {
                 $each: [activityText],
@@ -208,7 +212,7 @@ router.post("/scrape-linkedin", async (req, res) => {
 });
 
 // Updated helper function to transform LinkedIn data with user-provided phone info only
-function transformLinkedInDataWithPhone(linkedInProfile, userId, profileInput) {
+function transformLinkedInDataWithPhone(linkedInProfile, profileInput) {
   if (!linkedInProfile) {
     throw new Error('No profile data received');
   }
@@ -410,7 +414,6 @@ function transformLinkedInDataWithPhone(linkedInProfile, userId, profileInput) {
     email: profileInput.email || linkedInProfile.email || '', // Prioritize user-provided email
     phone: finalPhone, // Prioritize user-provided phone
     avatar: linkedInProfile.pictureUrl || linkedInProfile.profilePicture || 'https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop',
-    uploadedBy: userId,
     companySize,
     linkedinUrl: linkedInProfile.inputUrl || linkedInProfile.url || linkedInProfile.linkedinUrl || profileInput.url,
     extraLinks: profileInput.extraLinks || []

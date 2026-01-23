@@ -24,19 +24,19 @@ const profileSchema = new mongoose.Schema(
     phone: String,
     avatar: String,
     linkedinUrl: String,
-    linkedinId: { type: String, sparse: true, unique: true }, // Unique index on LinkedIn ID
+    linkedinId: { type: String, sparse: true, unique: true },
     extraLinks: [String],
     uploadedBy: String,
   },
-  { timestamps: { createdAt: 'uploadedAt', updatedAt: 'updatedAt' } }
+  { timestamps: { createdAt: "uploadedAt", updatedAt: "updatedAt" } }
 );
 
 // Pre-save middleware to extract and set LinkedIn ID
-profileSchema.pre('save', function(next) {
+profileSchema.pre("save", function (next) {
   if (this.linkedinUrl) {
     this.linkedinId = extractLinkedInId(this.linkedinUrl);
   }
   next();
 });
 
-module.exports = mongoose.model('Profile', profileSchema);
+module.exports = mongoose.model("Profile", profileSchema);
