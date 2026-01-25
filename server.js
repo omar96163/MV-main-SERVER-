@@ -83,12 +83,14 @@ const dashboardRoutes = require("./routes/dashboardRoutes");
 const auth = require("./routes/auth");
 const profileRoutes = require("./routes/profileRoutes");
 const linkedinScraper = require("./routes/linkedinScraper");
+const adminRoutes = require("./routes/admin");
 
 // API Routes with error boundary
 app.use("/auth", auth);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/profiles", profileRoutes);
 app.use("/api", linkedinScraper);
+app.use("/api/admin", adminRoutes);
 
 // Global error handling middleware
 app.use((err, req, res, next) => {

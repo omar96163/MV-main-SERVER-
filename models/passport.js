@@ -29,7 +29,7 @@ passport.use(
           user.googleId = profile.id;
           await user.save();
         }
-        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+        const token = jwt.sign({ id: user._id, isAdmin: user.isAdmin }, process.env.JWT_SECRET, {
           expiresIn: process.env.JWT_EXPIRES_IN || "7d",
         });
         return done(null, { token, user });

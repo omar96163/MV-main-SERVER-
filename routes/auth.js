@@ -19,8 +19,8 @@ const getRedirectURL = (path) => {
 };
 
 // Helper function to create JWT token
-const createToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+const createToken = (userId, isAdmin) => {
+  return jwt.sign({ id: userId, isAdmin: isAdmin }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   });
 };
@@ -32,6 +32,7 @@ const createUserResponse = (user) => {
     name: user.name,
     email: user.email,
     avatar: user.avatar || null,
+    isAdmin: user.isAdmin || false,
     googleId: user.googleId || null,
   };
 };
@@ -183,7 +184,7 @@ router.post("/verify-signup", async (req, res) => {
       recentActivity: ["Welcome to Dalily.ai! Your account is now active."],
     });
 
-    const token = createToken(user._id);
+    const token = createToken(user._id, user.isAdmin);
 
     res.json({
       success: true,
@@ -240,7 +241,7 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const token = createToken(user._id);
+    const token = createToken(user._id, user.isAdmin);
 
     console.log(`User logged in: ${user.email}`);
 
@@ -433,6 +434,7 @@ const authMiddleware = (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.userId = decoded.id;
+    req.isAdmin = decoded.isAdmin;
 
     next();
   } catch (err) {
@@ -535,7 +537,7 @@ router.post("/refresh-token", async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const newToken = createToken(user._id);
+    const newToken = createToken(user._id, user.isAdmin);
 
     res.json({
       success: true,
