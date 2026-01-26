@@ -24,7 +24,7 @@ router.get("/", async (req, res) => {
         id: p._id.toString(),
         // Set isUnlocked based on current user's unlocked list
         isUnlocked: userUnlockedIds.includes(p._id.toString()),
-      }))
+      })),
     );
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -81,7 +81,7 @@ router.get("/mine", async (req, res) => {
         id: p._id.toString(),
         isUnlocked: true, // كلهم مفتوحين أو مرفوعين
         isOwnUpload: uploadedSet.has(p._id.toString()),
-      }))
+      })),
     );
   } catch (err) {
     console.error("Error fetching user profiles:", err);
@@ -168,7 +168,7 @@ router.post("/:id/unlock", async (req, res) => {
           },
         },
         updatedAt: new Date(),
-      }
+      },
     );
 
     // Get updated dashboard
@@ -214,7 +214,7 @@ router.post("/", async (req, res) => {
           },
           updatedAt: new Date(),
         },
-        { upsert: true }
+        { upsert: true },
       );
     }
 
@@ -245,7 +245,7 @@ router.post("/bulk", async (req, res) => {
       const pointsToAdd = createdProfiles.length * 10;
       const profileIds = createdProfiles.map((p) => p._id.toString());
       const activityMessages = createdProfiles.map(
-        (p) => `Uploaded contact: ${p.name || "Unknown"}`
+        (p) => `Uploaded contact: ${p.name || "Unknown"}`,
       );
 
       await Dashboard.findOneAndUpdate(
@@ -265,7 +265,7 @@ router.post("/bulk", async (req, res) => {
           },
           updatedAt: new Date(),
         },
-        { upsert: true }
+        { upsert: true },
       );
     }
 

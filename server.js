@@ -106,9 +106,9 @@ app.use((err, req, res, next) => {
     error: isProduction
       ? {}
       : {
-        message: err.message,
-        stack: err.stack,
-      },
+          message: err.message,
+          stack: err.stack,
+        },
   });
 });
 
@@ -185,7 +185,7 @@ const startServer = async () => {
         console.log(`📊 Dashboard API: http://localhost:${PORT}/api/dashboard`);
         console.log(`👥 Profiles API: http://localhost:${PORT}/profiles`);
         console.log(
-          `🔗 LinkedIn Scraper API: http://localhost:${PORT}/api/scrape-linkedin`
+          `🔗 LinkedIn Scraper API: http://localhost:${PORT}/api/scrape-linkedin`,
         );
       });
 

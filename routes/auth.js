@@ -90,7 +90,7 @@ router.post("/request-signup", async (req, res) => {
     });
 
     const verificationCode = Math.floor(
-      100000 + Math.random() * 900000
+      100000 + Math.random() * 900000,
     ).toString();
     const hashedCode = crypto
       .createHash("sha256")
@@ -157,7 +157,9 @@ router.post("/verify-signup", async (req, res) => {
     if (user.verificationExpires < Date.now()) {
       return res
         .status(400)
-        .json({ message: "Verification code expired. Please request a new one." });
+        .json({
+          message: "Verification code expired. Please request a new one.",
+        });
     }
 
     // 🔐 تحقق من الكود
@@ -167,9 +169,7 @@ router.post("/verify-signup", async (req, res) => {
       .digest("hex");
 
     if (hashedCode !== user.verificationCode) {
-      return res
-        .status(400)
-        .json({ message: "Invalid verification code" });
+      return res.status(400).json({ message: "Invalid verification code" });
     }
 
     // ✅ تفعيل الحساب
@@ -410,7 +410,7 @@ router.get(
     // ريدايركت مع التوكن
     const redirectURL = getRedirectURL(`/google-success?token=${token}`);
     res.redirect(redirectURL);
-  }
+  },
 );
 
 // =========================
@@ -529,7 +529,7 @@ router.post("/refresh-token", async (req, res) => {
 
     const decoded = jwt.verify(
       refreshToken,
-      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
     );
     const user = await User.findById(decoded.id).select("-password");
 

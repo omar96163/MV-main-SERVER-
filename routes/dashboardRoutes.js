@@ -27,8 +27,12 @@ router.get("/", authMiddleware, async (req, res) => {
     }
 
     // Calculate actual stats from database to ensure accuracy
-    const actualUploads = await dashboard.uploadedProfileIds ? dashboard.uploadedProfileIds.length : 0;
-    const actualUnlockedCount = dashboard.unlockedProfileIds ? dashboard.unlockedProfileIds.length : 0;
+    const actualUploads = (await dashboard.uploadedProfileIds)
+      ? dashboard.uploadedProfileIds.length
+      : 0;
+    const actualUnlockedCount = dashboard.unlockedProfileIds
+      ? dashboard.unlockedProfileIds.length
+      : 0;
 
     // Update dashboard with accurate counts if they don't match
     if (
@@ -74,7 +78,7 @@ router.post("/", authMiddleware, async (req, res) => {
     const dashboard = await Dashboard.findOneAndUpdate(
       { userId },
       { $set: updateData },
-      { new: true, upsert: true }
+      { new: true, upsert: true },
     );
 
     res.json(dashboard);
@@ -167,7 +171,7 @@ router.patch("/activity", authMiddleware, async (req, res) => {
         },
         $set: { updatedAt: new Date() },
       },
-      { new: true, upsert: true }
+      { new: true, upsert: true },
     );
 
     res.json({
