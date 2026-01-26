@@ -17,7 +17,7 @@ const adminMiddleware = (req, res, next) => {
 // GET all users with dashboard stats
 router.get("/users", authMiddleware, adminMiddleware, async (req, res) => {
     try {
-        const users = await User.find({}).select("name email createdAt isAdmin");
+        const users = await User.find({}).select("name email updatedAt isAdmin");
 
         // Get dashboards for all users
         const userIds = users.map(user => user._id);
@@ -30,7 +30,7 @@ router.get("/users", authMiddleware, adminMiddleware, async (req, res) => {
                 name: user.name || user.email,
                 email: user.email,
                 isAdmin: user.isAdmin,
-                joinedAt: user.createdAt,
+                joinedAt: user.updatedAt,
                 points: dashboard?.availablePoints || 0,
                 uploads: dashboard?.uploadedProfiles || 0,
                 unlocks: dashboard?.unlockedProfiles || 0
