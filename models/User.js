@@ -22,8 +22,6 @@ const UserSchema = new mongoose.Schema({
   verificationCode: String,
   verificationExpires: Date,
   isAdmin: { type: Boolean, default: false },
-  banned: { type: Boolean, default: false },
-  status: { type: String, default: 'active', enum: ['active', 'banned', 'suspended'] }
 },
   { timestamps: { createdAt: "uploadedAt" } }
 );
