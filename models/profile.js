@@ -28,7 +28,7 @@ const profileSchema = new mongoose.Schema(
     extraLinks: [String],
     uploadedBy: String,
   },
-  { timestamps: { createdAt: "uploadedAt", updatedAt: "updatedAt" } }
+  { timestamps: { createdAt: "uploadedAt", updatedAt: "updatedAt" } },
 );
 
 // Pre-save middleware to extract and set LinkedIn ID

@@ -29,14 +29,18 @@ passport.use(
           user.googleId = profile.id;
           await user.save();
         }
-        const token = jwt.sign({ id: user._id, isAdmin: user.isAdmin }, process.env.JWT_SECRET, {
-          expiresIn: process.env.JWT_EXPIRES_IN || "7d",
-        });
+        const token = jwt.sign(
+          { id: user._id, isAdmin: user.isAdmin },
+          process.env.JWT_SECRET,
+          {
+            expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+          },
+        );
         return done(null, { token, user });
       } catch (err) {
         console.error("🔥 Google Strategy Error:", err);
         done(err, null);
       }
-    }
-  )
+    },
+  ),
 );
