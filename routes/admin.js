@@ -14,10 +14,20 @@ const adminMiddleware = (req, res, next) => {
   next();
 };
 
+// Super Admin middleware - only super admins can access
+const superAdminMiddleware = (req, res, next) => {
+  if (!req?.isSuperAdmin) {
+    return res.status(403).json({ error: "Super admin access required" });
+  }
+  next();
+};
+
 // GET all users with dashboard stats
 router.get("/users", authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const users = await User.find({}).select("name email updatedAt isAdmin");
+    const users = await User.find({}).select(
+      "name email updatedAt isAdmin isSuperAdmin",
+    );
 
     // Get dashboards for all users
     const userIds = users.map((user) => user._id);
@@ -32,13 +42,13 @@ router.get("/users", authMiddleware, adminMiddleware, async (req, res) => {
         name: user.name || user.email,
         email: user.email,
         isAdmin: user.isAdmin,
+        isSuperAdmin: user.isSuperAdmin,
         joinedAt: user.updatedAt,
         points: dashboard?.availablePoints || 0,
         uploads: dashboard?.uploadedProfiles || 0,
         unlocks: dashboard?.unlockedProfiles || 0,
       };
     });
-
     res.json(usersWithStats);
   } catch (err) {
     console.error("Admin users fetch error:", err);
@@ -51,10 +61,16 @@ router.post(
   "/users/:id/toggle-admin",
   authMiddleware,
   adminMiddleware,
+  superAdminMiddleware,
   async (req, res) => {
     try {
       const userId = req.params.id;
-      console.log(userId);
+
+      if (userId.toString() === req.user.userId.toString()) {
+        return res
+          .status(400)
+          .json({ error: "Cannot change your own admin status" });
+      }
 
       const user = await User.findById(userId.toString());
       if (!user) {

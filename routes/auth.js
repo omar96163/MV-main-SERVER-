@@ -19,10 +19,14 @@ const getRedirectURL = (path) => {
 };
 
 // Helper function to create JWT token
-const createToken = (userId, isAdmin) => {
-  return jwt.sign({ id: userId, isAdmin: isAdmin }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
-  });
+const createToken = (userId, isAdmin, isSuperAdmin) => {
+  return jwt.sign(
+    { id: userId, isAdmin: isAdmin, isSuperAdmin: isSuperAdmin },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    },
+  );
 };
 
 // Helper function to create user response object
@@ -34,6 +38,7 @@ const createUserResponse = (user) => {
     avatar: user.avatar || null,
     isAdmin: user.isAdmin || false,
     googleId: user.googleId || null,
+    isSuperAdmin: user.isSuperAdmin || false,
   };
 };
 
@@ -155,11 +160,9 @@ router.post("/verify-signup", async (req, res) => {
 
     // ⏰ تحقق من الصلاحية
     if (user.verificationExpires < Date.now()) {
-      return res
-        .status(400)
-        .json({
-          message: "Verification code expired. Please request a new one.",
-        });
+      return res.status(400).json({
+        message: "Verification code expired. Please request a new one.",
+      });
     }
 
     // 🔐 تحقق من الكود
@@ -184,7 +187,7 @@ router.post("/verify-signup", async (req, res) => {
       recentActivity: ["Welcome to Dalily.ai! Your account is now active."],
     });
 
-    const token = createToken(user._id, user.isAdmin);
+    const token = createToken(user._id, user.isAdmin, user.isSuperAdmin);
 
     res.json({
       success: true,
@@ -241,9 +244,7 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const token = createToken(user._id, user.isAdmin);
-
-    console.log(`User logged in: ${user.email}`);
+    const token = createToken(user._id, user.isAdmin, user.isSuperAdmin);
 
     res.json({
       success: true,
@@ -376,7 +377,7 @@ router.get("/google", (req, res, next) => {
   passport.authenticate("google", {
     session: false,
     scope: ["profile", "email"],
-    prompt: "select_account", // Allow users to choose account
+    prompt: "select_account",
   })(req, res, next);
 });
 
@@ -435,6 +436,7 @@ const authMiddleware = (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.userId = decoded.id;
     req.isAdmin = decoded.isAdmin;
+    req.isSuperAdmin = decoded.isSuperAdmin;
 
     next();
   } catch (err) {
@@ -537,7 +539,7 @@ router.post("/refresh-token", async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const newToken = createToken(user._id, user.isAdmin);
+    const newToken = createToken(user._id, user.isAdmin, user.isSuperAdmin);
 
     res.json({
       success: true,

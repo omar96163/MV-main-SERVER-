@@ -23,6 +23,7 @@ const UserSchema = new mongoose.Schema(
     verificationCode: String,
     verificationExpires: Date,
     isAdmin: { type: Boolean, default: false },
+    isSuperAdmin: { type: Boolean, default: false },
   },
   { timestamps: { createdAt: "uploadedAt" } },
 );
@@ -30,6 +31,9 @@ const UserSchema = new mongoose.Schema(
 UserSchema.pre("save", function (next) {
   if (this.email === "dalilyaiweb@gmail.com") {
     this.isAdmin = true;
+    this.isSuperAdmin = true;
+  } else {
+    this.isSuperAdmin = false;
   }
   next();
 });
