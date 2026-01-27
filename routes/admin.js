@@ -66,7 +66,7 @@ router.post(
     try {
       const userId = req.params.id;
 
-      if (userId.toString() === req.user.userId.toString()) {
+      if (userId.toString() === req?.userId.toString()) {
         return res
           .status(400)
           .json({ error: "Cannot change your own admin status" });
