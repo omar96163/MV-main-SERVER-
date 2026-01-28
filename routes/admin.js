@@ -66,7 +66,7 @@ router.post(
     try {
       const userId = req.params.id;
 
-      if (userId.toString() === req?.userId.toString()) {
+      if (userId.toString() === req.userId.toString()) {
         return res
           .status(400)
           .json({ error: "Cannot change your own admin status" });
@@ -182,9 +182,16 @@ router.delete(
   "/users/:id",
   authMiddleware,
   adminMiddleware,
+  superAdminMiddleware,
   async (req, res) => {
     try {
       const userId = req.params.id;
+
+      if (userId.toString() === req.userId.toString()) {
+        return res
+          .status(400)
+          .json({ error: "Cannot delete your own account" });
+      }
 
       // Delete user's dashboard only
       await Dashboard.findOneAndDelete({ userId });
