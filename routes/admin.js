@@ -141,41 +141,52 @@ router.get("/contacts", authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
-// GET platform statistics
-router.get("/stats", authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const totalUsers = await User.countDocuments();
-    const totalContacts = await Profile.countDocuments();
-    const totalDashboards = await Dashboard.countDocuments();
+// GET recent admin activities
+router.get(
+  "/recent-activities",
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      // Get last 5 user registrations
+      const recentUsers = await User.find()
+        .sort({ uploadedAt: -1 })
+        .limit(5)
+        .select("name email uploadedAt");
 
-    // Get total points distributed
-    const dashboards = await Dashboard.find({});
-    const totalPoints = dashboards.reduce(
-      (sum, dashboard) => sum + dashboard.availablePoints,
-      0,
-    );
+      // Get last 5 contact uploads
+      const recentContacts = await Profile.find()
+        .sort({ uploadedAt: -1 })
+        .limit(5)
+        .select("name uploadedBy uploadedAt");
 
-    // Get active users this month
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+      // Combine and sort activities
+      const activities = [
+        ...recentUsers.map((user) => ({
+          message: `New user registered: ${user.name || user.email}`,
+          timestamp: user.uploadedAt,
+          type: "user",
+        })),
+        ...recentContacts.map((contact) => ({
+          message: `Contact uploaded: ${contact.name}`,
+          timestamp: contact.uploadedAt,
+          type: "contact",
+        })),
+      ]
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        .slice(0, 10)
+        .map((activity) => ({
+          message: activity.message,
+          timestamp: new Date(activity.timestamp).toLocaleDateString(),
+        }));
 
-    const activeUsersThisMonth = await User.countDocuments({
-      createdAt: { $gte: startOfMonth },
-    });
-
-    res.json({
-      totalUsers,
-      totalContacts,
-      totalPointsDistributed: totalPoints,
-      activeUsersThisMonth,
-      totalDashboards,
-    });
-  } catch (err) {
-    console.error("Admin stats fetch error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
+      res.json(activities);
+    } catch (err) {
+      console.error("Admin activities fetch error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
 
 // Delete user (with cascade delete)
 router.delete(
