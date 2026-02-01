@@ -163,7 +163,7 @@ router.get(
       // Combine and sort activities
       const activities = [
         ...recentUsers.map((user) => ({
-          message: `New user registered: ${user.name || user.email}`,
+          message: `New user registered: ${user.email}`,
           timestamp: user.uploadedAt,
           type: "user",
         })),
