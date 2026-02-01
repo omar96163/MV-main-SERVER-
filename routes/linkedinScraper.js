@@ -132,8 +132,9 @@ router.post("/scrape-linkedin", async (req, res) => {
       // ← التحقق من Free Limit
       if (scrapedData.length === 0) {
         return res.status(429).json({
-          error: "Free limit exceeded. Please upgrade your Apify plan.",
-          message: "You've reached the free usage limit for LinkedIn scraping.",
+          error: "Free limit exceeded. Please upgrade your Apify plan",
+          message:
+            "You've reached the free limit Or there is an error in scraping process",
         });
       }
 
