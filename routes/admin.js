@@ -26,7 +26,7 @@ const superAdminMiddleware = (req, res, next) => {
 router.get("/users", authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const users = await User.find({}).select(
-      "name email updatedAt isAdmin isSuperAdmin",
+      "name email uploadedAt isAdmin isSuperAdmin",
     );
 
     // Get dashboards for all users
@@ -43,7 +43,7 @@ router.get("/users", authMiddleware, adminMiddleware, async (req, res) => {
         email: user.email,
         isAdmin: user.isAdmin,
         isSuperAdmin: user.isSuperAdmin,
-        joinedAt: user.updatedAt,
+        joinedAt: user.uploadedAt,
         points: dashboard?.availablePoints || 0,
         uploads: dashboard?.uploadedProfiles || 0,
         unlocks: dashboard?.unlockedProfiles || 0,

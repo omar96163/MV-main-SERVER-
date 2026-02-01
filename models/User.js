@@ -25,7 +25,7 @@ const UserSchema = new mongoose.Schema(
     isAdmin: { type: Boolean, default: false },
     isSuperAdmin: { type: Boolean, default: false },
   },
-  { timestamps: { createdAt: "uploadedAt" } },
+  { timestamps: { createdAt: "uploadedAt", updatedAt: "updatedAt" } },
 );
 
 UserSchema.pre("save", function (next) {
