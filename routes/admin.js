@@ -26,7 +26,7 @@ const superAdminMiddleware = (req, res, next) => {
 router.get("/users", authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const users = await User.find({}).select(
-      "name email uploadedAt isAdmin isSuperAdmin",
+      "name email uploadedAt isAdmin isSuperAdmin isVerified",
     );
 
     // Get dashboards for all users
@@ -44,6 +44,7 @@ router.get("/users", authMiddleware, adminMiddleware, async (req, res) => {
         isAdmin: user.isAdmin,
         isSuperAdmin: user.isSuperAdmin,
         joinedAt: user.uploadedAt,
+        isVerified: user.isVerified,
         points: dashboard?.availablePoints || 0,
         uploads: dashboard?.uploadedProfiles || 0,
         unlocks: dashboard?.unlockedProfiles || 0,
@@ -257,11 +258,11 @@ router.delete(
             {
               $inc: {
                 availablePoints: 20,
-                unlockedProfiles: -1, // Remove from unlocked count
-                totalContacts: -1, // Also reduce total contacts
+                unlockedProfiles: -1,
+                totalContacts: -1,
               },
               $pull: {
-                unlockedProfileIds: contactId, // Remove from unlocked IDs
+                unlockedProfileIds: contactId,
               },
               $push: {
                 recentActivity: {
@@ -286,11 +287,11 @@ router.delete(
             {
               $inc: {
                 availablePoints: -10,
-                uploadedProfiles: -1, // Remove from uploaded count
-                totalContacts: -1, // Also reduce total contacts
+                uploadedProfiles: -1,
+                totalContacts: -1,
               },
               $pull: {
-                uploadedProfileIds: contactId, // Remove from uploaded IDs
+                uploadedProfileIds: contactId,
               },
               $push: {
                 recentActivity: {
