@@ -218,7 +218,7 @@ router.post("/login", async (req, res) => {
     // Find user
     const user = await User.findOne({ email: email.toLowerCase().trim() });
     if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ message: "Invalid email or password" });
     }
 
     // Check if user has a password (might be Google-only user)
@@ -231,7 +231,13 @@ router.post("/login", async (req, res) => {
     // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ message: "Invalid email or password" });
+    }
+
+    if (!user.isVerified) {
+      return res.status(400).json({
+        message: "Please verify your email",
+      });
     }
 
     // Ensure user has a dashboard
