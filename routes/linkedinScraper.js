@@ -224,9 +224,6 @@ router.post("/scrape-linkedin", async (req, res) => {
       try {
         results.processed++;
 
-        // Update existing profile with new data - MERGE phone numbers
-        existingProfile.email = profile.email || existingProfile.email;
-
         if (profile.phone && profile.phone !== existingProfile.phone) {
           // If we have a new phone and it's different from existing
           const existingPhones = Array.isArray(existingProfile.phone)
@@ -273,7 +270,6 @@ router.post("/scrape-linkedin", async (req, res) => {
         await existingProfile.save();
 
         const pointsEarned = 5;
-        const profileId = existingProfile._id.toString();
 
         // Update dashboard
         await Dashboard.findOneAndUpdate(
@@ -336,11 +332,6 @@ function transformLinkedInDataWithPhone(linkedInProfile, profileInput) {
   if (!linkedInProfile) {
     throw new Error("No profile data received");
   }
-
-  // Ensure extraLinks are properly handled from profileInput
-  const extraLinks = Array.isArray(profileInput.extraLinks)
-    ? profileInput.extraLinks.filter(Boolean)
-    : [];
 
   // Extract work experience description from positions array
   let workExperience = "";
@@ -568,8 +559,21 @@ function transformLinkedInDataWithPhone(linkedInProfile, profileInput) {
     linkedInProfile.positions?.[0]?.locationName ||
     "";
 
-  // Use user-provided phone info as priority, fallback to LinkedIn data
-  const finalPhone = profileInput.phone || linkedInProfile.phone || "";
+  const finalEmail = Array.isArray(profileInput.email)
+    ? profileInput.email.filter((email) => email && email.trim() !== "")
+    : profileInput.email && profileInput.email.trim() !== ""
+      ? [profileInput.email.trim()]
+      : [];
+
+  const finalPhone = Array.isArray(profileInput.phone)
+    ? profileInput.phone.filter((phone) => phone && phone.trim() !== "")
+    : profileInput.phone && profileInput.phone.trim() !== ""
+      ? [profileInput.phone.trim()]
+      : [];
+
+  const finalExtraLinks = Array.isArray(profileInput.extraLinks)
+    ? profileInput.extraLinks.filter((link) => link && link.trim() !== "")
+    : [];
 
   return {
     name:
@@ -588,8 +592,8 @@ function transformLinkedInDataWithPhone(linkedInProfile, profileInput) {
     skills,
     education,
     workExperience,
-    email: profileInput.email || linkedInProfile.email || "", // Prioritize user-provided email
-    phone: finalPhone, // Prioritize user-provided phone
+    email: finalEmail || linkedInProfile.email || [],
+    phone: finalPhone || [],
     avatar:
       linkedInProfile.pictureUrl ||
       linkedInProfile.profilePicture ||
@@ -600,7 +604,7 @@ function transformLinkedInDataWithPhone(linkedInProfile, profileInput) {
       linkedInProfile.url ||
       linkedInProfile.linkedinUrl ||
       profileInput.url,
-    extraLinks: profileInput.extraLinks || [],
+    extraLinks: finalExtraLinks || [],
   };
 }
 
