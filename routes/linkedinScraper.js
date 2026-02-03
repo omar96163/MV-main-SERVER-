@@ -224,11 +224,52 @@ router.post("/scrape-linkedin", async (req, res) => {
       try {
         results.processed++;
 
-        // Update existing profile with new data
+        // Update existing profile with new data - MERGE phone numbers
         existingProfile.email = profile.email || existingProfile.email;
-        existingProfile.phone = profile.phone || existingProfile.phone;
-        existingProfile.extraLinks =
-          profile.extraLinks || existingProfile.extraLinks;
+
+        if (profile.phone && profile.phone !== existingProfile.phone) {
+          // If we have a new phone and it's different from existing
+          const existingPhones = Array.isArray(existingProfile.phone)
+            ? existingProfile.phone
+            : existingProfile.phone
+              ? [existingProfile.phone]
+              : [];
+
+          // Add new phone if not already present
+          if (!existingPhones.includes(profile.phone)) {
+            existingPhones.push(profile.phone);
+            existingProfile.phone = existingPhones;
+          }
+        }
+
+        if (profile.email && profile.email !== existingProfile.email) {
+          const existingEmails = Array.isArray(existingProfile.email)
+            ? existingProfile.email
+            : existingProfile.email
+              ? [existingProfile.email]
+              : [];
+
+          if (!existingEmails.includes(profile.email)) {
+            existingEmails.push(profile.email);
+            existingProfile.email = existingEmails;
+          }
+        }
+
+        if (profile.extraLinks && profile.extraLinks.length > 0) {
+          const existingLinks = Array.isArray(existingProfile.extraLinks)
+            ? existingProfile.extraLinks
+            : existingProfile.extraLinks
+              ? [existingProfile.extraLinks]
+              : [];
+
+          const newLinks = profile.extraLinks.filter(
+            (link) => !existingLinks.includes(link),
+          );
+          if (newLinks.length > 0) {
+            existingProfile.extraLinks = [...existingLinks, ...newLinks];
+          }
+        }
+
         await existingProfile.save();
 
         const pointsEarned = 5;

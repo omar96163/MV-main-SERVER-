@@ -20,15 +20,15 @@ const profileSchema = new mongoose.Schema(
     skills: [String],
     education: String,
     workExperience: String,
-    email: String,
-    phone: String,
+    email: [String],
+    phone: [String],
     avatar: String,
     linkedinUrl: String,
     linkedinId: { type: String, sparse: true, unique: true },
     extraLinks: [String],
     uploadedBy: String,
   },
-  { timestamps: { createdAt: "uploadedAt", updatedAt: "updatedAt" } },
+  { timestamps: { createdAt: "uploadedAt", updatedAt: "updatedAt" } }
 );
 
 // Pre-save middleware to extract and set LinkedIn ID
