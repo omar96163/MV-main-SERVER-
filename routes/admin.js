@@ -369,33 +369,33 @@ router.get("/export", authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
-// proxy rout to fetch images from linkedin 
+// proxy rout to fetch images from linkedin
 router.get("/proxy-image", async (req, res) => {
   try {
     const { url } = req.query;
-    
+
     if (!url || !url.includes("media.licdn.com")) {
       return res.status(400).json({ error: "Invalid URL" });
     }
 
     const imageResponse = await fetch(url);
-    
+
     if (!imageResponse.ok) {
-      throw new Error('Image not found');
+      throw new Error("Image not found");
     }
 
     // Get content type
-    const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
-    
+    const contentType =
+      imageResponse.headers.get("content-type") || "image/jpeg";
+
     // Convert to buffer correctly
     const arrayBuffer = await imageResponse.arrayBuffer();
     const imageBuffer = Buffer.from(arrayBuffer);
 
     // Set headers and send image
-    res.set('Content-Type', contentType);
-    res.set('Cache-Control', 'public, max-age=86400');
+    res.set("Content-Type", contentType);
+    res.set("Cache-Control", "public, max-age=86400");
     res.send(imageBuffer);
-    
   } catch (error) {
     console.error("Proxy image error:", error);
     res.status(404).end();
