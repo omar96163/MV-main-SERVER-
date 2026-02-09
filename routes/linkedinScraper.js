@@ -2,8 +2,14 @@ const express = require("express");
 const Profile = require("../models/profile");
 const Dashboard = require("../models/Dashboard");
 const { extractLinkedInId } = require("../utils/linkedinHelper");
+const cloudinary = require("cloudinary").v2;
 
 const router = express.Router();
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 router.post("/scrape-linkedin", async (req, res) => {
   try {
@@ -328,9 +334,29 @@ router.post("/scrape-linkedin", async (req, res) => {
 });
 
 // Updated helper function to transform LinkedIn data with user-provided phone info only
-function transformLinkedInDataWithPhone(linkedInProfile, profileInput) {
+async function transformLinkedInDataWithPhone(linkedInProfile, profileInput) {
   if (!linkedInProfile) {
     throw new Error("No profile data received");
+  }
+
+  let savedAvatarUrl = "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop";
+
+  if (linkedInProfile.pictureUrl || linkedInProfile.profilePicture) {
+    try {
+      const avatarUrl =
+        linkedInProfile.pictureUrl || linkedInProfile.profilePicture;
+
+      // Upload to Cloudinary
+      const result = await cloudinary.uploader.upload(avatarUrl, {
+        folder: "avatars",
+        overwrite: false,
+        invalidate: false,
+      });
+
+      savedAvatarUrl = result.secure_url;
+    } catch (error) {
+      console.error("Cloudinary upload failed:", error);
+    }
   }
 
   // Extract work experience description from positions array
@@ -594,10 +620,7 @@ function transformLinkedInDataWithPhone(linkedInProfile, profileInput) {
     workExperience,
     email: finalEmail || linkedInProfile.email || [],
     phone: finalPhone || [],
-    avatar:
-      linkedInProfile.pictureUrl ||
-      linkedInProfile.profilePicture ||
-      "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop",
+    avatar: savedAvatarUrl,
     companySize,
     linkedinUrl:
       linkedInProfile.inputUrl ||
