@@ -5,6 +5,7 @@ const { extractLinkedInId } = require("../utils/linkedinHelper");
 const cloudinary = require("cloudinary").v2;
 
 const router = express.Router();
+
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -169,12 +170,30 @@ router.post("/scrape-linkedin", async (req, res) => {
               contactData.jobTitle);
 
           if (!hasMinimumData) {
-            throw new Error("Insufficient profile data");
+            throw new Error("profile does not have enough data to be saved");
           }
 
           // Create new profile
           contactData.uploadedBy = userId;
           const savedContact = await Profile.create(contactData);
+
+          if (profileData.pictureUrl || profileData.profilePicture) {
+            setImmediate(async () => {
+              try {
+                const result = await cloudinary.uploader.upload(
+                  profileData.pictureUrl || profileData.profilePicture,
+                  { folder: "avatars", overwrite: false },
+                );
+
+                await Profile.findByIdAndUpdate(savedContact._id, {
+                  avatar: result.secure_url,
+                });
+              } catch (error) {
+                console.error("Avatar upload failed:", error);
+              }
+            });
+          }
+
           const pointsEarned = 10;
           const profileId = savedContact._id.toString();
 
@@ -334,29 +353,9 @@ router.post("/scrape-linkedin", async (req, res) => {
 });
 
 // Updated helper function to transform LinkedIn data with user-provided phone info only
-async function transformLinkedInDataWithPhone(linkedInProfile, profileInput) {
+function transformLinkedInDataWithPhone(linkedInProfile, profileInput) {
   if (!linkedInProfile) {
     throw new Error("No profile data received");
-  }
-
-  let savedAvatarUrl = "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop";
-
-  if (linkedInProfile.pictureUrl || linkedInProfile.profilePicture) {
-    try {
-      const avatarUrl =
-        linkedInProfile.pictureUrl || linkedInProfile.profilePicture;
-
-      // Upload to Cloudinary
-      const result = await cloudinary.uploader.upload(avatarUrl, {
-        folder: "avatars",
-        overwrite: false,
-        invalidate: false,
-      });
-
-      savedAvatarUrl = result.secure_url;
-    } catch (error) {
-      console.error("Cloudinary upload failed:", error);
-    }
   }
 
   // Extract work experience description from positions array
@@ -620,7 +619,10 @@ async function transformLinkedInDataWithPhone(linkedInProfile, profileInput) {
     workExperience,
     email: finalEmail || linkedInProfile.email || [],
     phone: finalPhone || [],
-    avatar: savedAvatarUrl,
+    avatar:
+    linkedInProfile.pictureUrl ||
+    linkedInProfile.profilePicture ||
+    "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop",
     companySize,
     linkedinUrl:
       linkedInProfile.inputUrl ||
