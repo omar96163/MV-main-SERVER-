@@ -180,10 +180,26 @@ router.post("/scrape-linkedin", async (req, res) => {
           if (profileData.pictureUrl || profileData.profilePicture) {
             setImmediate(async () => {
               try {
-                const result = await cloudinary.uploader.upload(
-                  profileData.pictureUrl || profileData.profilePicture,
-                  { folder: "avatars", overwrite: false },
-                );
+                const avatarUrl =
+                  profileData.pictureUrl || profileData.profilePicture;
+
+                const urlHash = Buffer.from(avatarUrl)
+                  .toString("base64")
+                  .substring(0, 50);
+                const publicId = `avatars/${urlHash}`;
+
+                try {
+                  await cloudinary.api.resource(publicId);
+                  console.log("Avatar already exists in Cloudinary");
+                  return;
+                } catch (checkError) {}
+
+                const result = await cloudinary.uploader.upload(avatarUrl, {
+                  folder: "avatars",
+                  public_id: publicId,
+                  overwrite: false,
+                  invalidate: false,
+                });
 
                 await Profile.findByIdAndUpdate(savedContact._id, {
                   avatar: result.secure_url,
