@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 const Profile = require("../models/profile");
 const Dashboard = require("../models/Dashboard");
 const { extractLinkedInId } = require("../utils/linkedinHelper");
@@ -22,7 +23,7 @@ router.post("/scrape-linkedin", async (req, res) => {
       !Array.isArray(profilesData) ||
       profilesData.length === 0
     ) {
-      return res.status(400).json({ error: "ProfilesData array is required" });
+      return res.status(400).json({ error: "ProfilesData is required" });
     }
 
     if (!userId) {
@@ -48,6 +49,15 @@ router.post("/scrape-linkedin", async (req, res) => {
 
     if (validProfiles.length === 0) {
       return res.status(400).json({ error: "No valid LinkedIn URLs found" });
+    }
+
+    if (
+      validProfiles.length > 0 &&
+      validProfiles.every((p) => !p.phone && !p.email)
+    ) {
+      return res.status(400).json({
+        error: "You must add phone or email to uploading or updating a profile",
+      });
     }
 
     // Check which profiles already exist in database
@@ -136,7 +146,6 @@ router.post("/scrape-linkedin", async (req, res) => {
       );
       const scrapedData = await itemsResponse.json();
 
-      // ← التحقق من Free Limit
       if (scrapedData.length === 0) {
         return res.status(429).json({
           error: "Free limit exceeded. Please upgrade your Apify plan",
@@ -178,36 +187,37 @@ router.post("/scrape-linkedin", async (req, res) => {
           const savedContact = await Profile.create(contactData);
 
           if (profileData.pictureUrl || profileData.profilePicture) {
-            setImmediate(async () => {
+            try {
+              const avatarUrl =
+                profileData.pictureUrl || profileData.profilePicture;
+              const publicId = crypto
+                .createHash("sha256")
+                .update(avatarUrl)
+                .digest("hex");
+
+              let imageUrl;
               try {
-                const avatarUrl =
-                  profileData.pictureUrl || profileData.profilePicture;
-
-                const urlHash = Buffer.from(avatarUrl)
-                  .toString("base64")
-                  .substring(0, 50);
-                const publicId = `avatars/${urlHash}`;
-
-                try {
-                  await cloudinary.api.resource(publicId);
-                  console.log("Avatar already exists in Cloudinary");
-                  return;
-                } catch (checkError) {}
-
+                const existing = await cloudinary.api.resource(
+                  `avatars/${publicId}`,
+                );
+                imageUrl = existing.secure_url;
+              } catch (e) {
                 const result = await cloudinary.uploader.upload(avatarUrl, {
                   folder: "avatars",
                   public_id: publicId,
                   overwrite: false,
                   invalidate: false,
                 });
-
-                await Profile.findByIdAndUpdate(savedContact._id, {
-                  avatar: result.secure_url,
-                });
-              } catch (error) {
-                console.error("Avatar upload failed:", error);
+                imageUrl = result.secure_url;
               }
-            });
+
+              await Profile.findByIdAndUpdate(savedContact._id, {
+                avatar: imageUrl,
+              });
+              console.log("Avatar uploaded successfully:", imageUrl);
+            } catch (error) {
+              console.error("Avatar upload failed:", error);
+            }
           }
 
           const pointsEarned = 10;
@@ -264,32 +274,40 @@ router.post("/scrape-linkedin", async (req, res) => {
     for (const { profile, existingProfile } of profilesToUpdate) {
       try {
         results.processed++;
+        let hasChanges = [];
+        let errors = [];
 
-        if (profile.phone && profile.phone !== existingProfile.phone) {
-          // If we have a new phone and it's different from existing
+        if (profile.phone && profile.phone.trim() !== "") {
+          const newPhone = profile.phone.trim();
           const existingPhones = Array.isArray(existingProfile.phone)
             ? existingProfile.phone
             : existingProfile.phone
               ? [existingProfile.phone]
               : [];
 
-          // Add new phone if not already present
-          if (!existingPhones.includes(profile.phone)) {
-            existingPhones.push(profile.phone);
+          if (existingPhones.includes(newPhone)) {
+            errors.push(`Phone (${newPhone}) already exists`);
+          } else {
+            existingPhones.push(newPhone);
             existingProfile.phone = existingPhones;
+            hasChanges.push("phone");
           }
         }
 
-        if (profile.email && profile.email !== existingProfile.email) {
+        if (profile.email && profile.email.trim() !== "") {
+          const newEmail = profile.email.trim();
           const existingEmails = Array.isArray(existingProfile.email)
             ? existingProfile.email
             : existingProfile.email
               ? [existingProfile.email]
               : [];
 
-          if (!existingEmails.includes(profile.email)) {
-            existingEmails.push(profile.email);
+          if (existingEmails.includes(newEmail)) {
+            errors.push(`Email (${newEmail}) already exists`);
+          } else {
+            existingEmails.push(newEmail);
             existingProfile.email = existingEmails;
+            hasChanges.push("email");
           }
         }
 
@@ -300,49 +318,99 @@ router.post("/scrape-linkedin", async (req, res) => {
               ? [existingProfile.extraLinks]
               : [];
 
-          const newLinks = profile.extraLinks.filter(
+          const uniqueInputLinks = [
+            ...new Set(profile.extraLinks.map((link) => link.trim())),
+          ].filter((link) => link);
+
+          const newLinks = uniqueInputLinks.filter(
             (link) => !existingLinks.includes(link),
           );
+          const oldLinks = uniqueInputLinks.filter((link) =>
+            existingLinks.includes(link),
+          );
+
           if (newLinks.length > 0) {
             existingProfile.extraLinks = [...existingLinks, ...newLinks];
+            hasChanges.push("extra links");
+          }
+
+          if (oldLinks.length > 0) {
+            errors.push(
+              `Extra link(s) : ${oldLinks.join(" , ")} already exists`,
+            );
           }
         }
 
-        await existingProfile.save();
+        if (hasChanges.length > 0 && errors.length > 0) {
+          await existingProfile.save();
 
-        const pointsEarned = 5;
-
-        // Update dashboard
-        await Dashboard.findOneAndUpdate(
-          { userId },
-          {
-            $inc: {
-              availablePoints: pointsEarned,
-            },
-            $push: {
-              recentActivity: {
-                $each: [
-                  `Updated LinkedIn profile: ${existingProfile.name || "Unknown"}`,
-                ],
-                $slice: -10,
+          const pointsEarned = 5;
+          await Dashboard.findOneAndUpdate(
+            { userId },
+            {
+              $inc: { availablePoints: pointsEarned },
+              $push: {
+                recentActivity: {
+                  $each: [
+                    `Updated LinkedIn profile: ${existingProfile.name || "Unknown"}`,
+                  ],
+                  $slice: -10,
+                },
               },
+              updatedAt: new Date(),
             },
-            updatedAt: new Date(),
-          },
-          { upsert: true },
-        );
+            { upsert: true },
+          );
 
-        results.successful++;
-        results.results.push({
-          url: profile.url,
-          status: "success",
-          pointsEarned,
-          data: {
-            name: existingProfile.name,
-            jobTitle: existingProfile.jobTitle,
-            company: existingProfile.company,
-          },
-        });
+          const ChangesMessage = `Updated : ${hasChanges.join(", ")}`;
+          const errorsMessage = `But : ${errors.join(" || ")}`;
+
+          results.successful++;
+          results.results.push({
+            url: profile.url,
+            status: "warning",
+            warning: `${ChangesMessage} / ${errorsMessage}`,
+          });
+        } else if (errors.length > 0) {
+          results.failed++;
+          results.results.push({
+            url: profile.url,
+            status: "failed",
+            error: errors.join(" || "),
+          });
+        } else if (hasChanges.length > 0) {
+          await existingProfile.save();
+
+          const pointsEarned = 5;
+          await Dashboard.findOneAndUpdate(
+            { userId },
+            {
+              $inc: { availablePoints: pointsEarned },
+              $push: {
+                recentActivity: {
+                  $each: [
+                    `Updated LinkedIn profile: ${existingProfile.name || "Unknown"}`,
+                  ],
+                  $slice: -10,
+                },
+              },
+              updatedAt: new Date(),
+            },
+            { upsert: true },
+          );
+
+          results.successful++;
+          results.results.push({
+            url: profile.url,
+            status: "success",
+            pointsEarned,
+            data: {
+              name: existingProfile.name,
+              jobTitle: existingProfile.jobTitle,
+              company: existingProfile.company,
+            },
+          });
+        }
       } catch (error) {
         results.failed++;
         results.results.push({
