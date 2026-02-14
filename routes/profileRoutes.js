@@ -164,7 +164,7 @@ router.post("/:id/unlock", async (req, res) => {
           unlockedProfileIds: profileId, // Add to user's unlocked list
           recentActivity: {
             $each: [`Unlocked LinkedIn profile: ${profile.name || "Unknown"}`],
-            $slice: -10, // Keep only last 10 activities
+            $slice: -20,
           },
         },
         updatedAt: new Date(),
@@ -209,7 +209,7 @@ router.post("/", async (req, res) => {
             uploadedProfileIds: profile._id.toString(),
             recentActivity: {
               $each: [`Uploaded contact: ${req.body.name || "Unknown"}`],
-              $slice: -10,
+              $slice: -20,
             },
           },
           updatedAt: new Date(),
@@ -260,7 +260,7 @@ router.post("/bulk", async (req, res) => {
             uploadedProfileIds: { $each: profileIds },
             recentActivity: {
               $each: activityMessages,
-              $slice: -10,
+              $slice: -20,
             },
           },
           updatedAt: new Date(),

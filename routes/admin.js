@@ -22,6 +22,14 @@ const superAdminMiddleware = (req, res, next) => {
   next();
 };
 
+// Function to extract LinkedIn identifier from URL
+function extractLinkedInId(url) {
+  if (!url) return null;
+  // Match the pattern: linkedin.com/in/USERNAME
+  const match = url.match(/linkedin\.com\/in\/([^/?]+)/);
+  return match ? match[1].toLowerCase() : null;
+}
+
 // GET all users with dashboard stats
 router.get("/users", authMiddleware, adminMiddleware, async (req, res) => {
   try {
@@ -387,5 +395,191 @@ router.get("/export", authMiddleware, adminMiddleware, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+function transformImportedContact(contact) {
+  const newContact = {};
+
+  for (let key in contact) {
+    newContact[key.toLowerCase()] = contact[key];
+  }
+  // Ensure arrays
+  const email = Array.isArray(newContact.email)
+    ? newContact.email.filter((e) => e && e.trim())
+    : newContact.email
+      ? [newContact.email].filter((e) => e && e.trim())
+      : [];
+
+  const phone = Array.isArray(newContact.phone)
+    ? newContact.phone.filter((p) => p && p.trim())
+    : newContact.phone
+      ? [newContact.phone].filter((p) => p && p.trim())
+      : [];
+
+  const skills = Array.isArray(newContact.skills)
+    ? newContact.skills.filter((s) => s && s.trim())
+    : newContact.skills
+      ? [newContact.skills].filter((s) => s && s.trim())
+      : [];
+
+  const extraLinks = Array.isArray(newContact.extralinks)
+    ? newContact.extralinks.filter((l) => l && l.trim())
+    : newContact.extralinks
+      ? [newContact.extralinks].filter((l) => l && l.trim())
+      : [];
+
+  const linkedinUrl = newContact.linkedinurl || "";
+  const linkedinId = extractLinkedInId(linkedinUrl.trim());
+
+  return {
+    name: newContact.name || linkedinId || "",
+    jobTitle: newContact.jobtitle || "",
+    company: newContact.company || "",
+    location: newContact.location || "",
+    industry: newContact.industry || "Other",
+    experience: newContact.experience || 0,
+    seniorityLevel: newContact.senioritylevel || "Mid-level",
+    skills: skills || [],
+    education: newContact.education || "",
+    workExperience: newContact.workexperience || "",
+    email: email || [],
+    phone: phone || [],
+    avatar:
+      newContact.avatar ||
+      "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop",
+    linkedinUrl: newContact.linkedinurl || "",
+    linkedinId: linkedinId || "",
+    extraLinks: extraLinks || [],
+  };
+}
+
+router.post(
+  "/import-contacts",
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const { contacts } = req.body;
+      const userId = req?.userId;
+
+      const results = {
+        total: contacts.length,
+        successful: 0,
+        failed: 0,
+        errors: [],
+      };
+
+      for (const contact of contacts) {
+        try {
+          // Transform imported contact
+          const transformedContact = transformImportedContact(contact);
+
+          // Validate
+          if (
+            !transformedContact.linkedinUrl ||
+            (!transformedContact.email.length &&
+              !transformedContact.phone.length)
+          ) {
+            throw new Error(
+              "Contact must have linkedinUrl and at least one Email or Phone",
+            );
+          }
+
+          // Check existing
+          const existingContact = await Profile.findOne({
+            linkedinId: transformedContact.linkedinId,
+          });
+
+          if (existingContact) {
+            // Update existing
+            const updateData = {
+              ...transformedContact,
+              uploadedBy: userId,
+              updatedAt: new Date(),
+            };
+
+            // Merge arrays
+            if (transformedContact.email.length) {
+              updateData.email = [
+                ...new Set([
+                  ...existingContact.email,
+                  ...transformedContact.email,
+                ]),
+              ];
+            }
+            if (transformedContact.phone.length) {
+              updateData.phone = [
+                ...new Set([
+                  ...existingContact.phone,
+                  ...transformedContact.phone,
+                ]),
+              ];
+            }
+            if (transformedContact.skills.length) {
+              updateData.skills = [
+                ...new Set([
+                  ...existingContact.skills,
+                  ...transformedContact.skills,
+                ]),
+              ];
+            }
+            if (transformedContact.extraLinks.length) {
+              updateData.extraLinks = [
+                ...new Set([
+                  ...existingContact.extraLinks,
+                  ...transformedContact.extraLinks,
+                ]),
+              ];
+            }
+
+            await Profile.findByIdAndUpdate(existingContact._id, updateData);
+          } else {
+            // Create new
+            const newContact = new Profile({
+              ...transformedContact,
+              uploadedBy: userId,
+            });
+            await newContact.save();
+
+            const pointsEarned = 10;
+            await Dashboard.findOneAndUpdate(
+              { userId },
+              {
+                $inc: {
+                  availablePoints: pointsEarned,
+                  totalContacts: 1,
+                  uploadedProfiles: 1,
+                },
+                $push: {
+                  recentActivity: {
+                    $each: [
+                      `Uploaded LinkedIn profile: ${transformedContact.name || "Unknown"}`,
+                    ],
+                    $slice: -20,
+                  },
+                },
+                $addToSet: {
+                  uploadedProfileIds: newContact._id,
+                },
+                updatedAt: new Date(),
+              },
+            );
+          }
+
+          results.successful++;
+        } catch (error) {
+          results.failed++;
+          results.errors.push(
+            `Contact ${results.total - results.failed}: ${error.message}`,
+          );
+        }
+      }
+
+      res.json({ success: true, results });
+    } catch (error) {
+      console.error("Import contacts error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
 
 module.exports = router;

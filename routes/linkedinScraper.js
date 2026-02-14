@@ -237,7 +237,7 @@ router.post("/scrape-linkedin", async (req, res) => {
                   $each: [
                     `Uploaded LinkedIn profile: ${contactData.name || "Unknown"}`,
                   ],
-                  $slice: -10,
+                  $slice: -20,
                 },
               },
               $addToSet: {
@@ -354,7 +354,7 @@ router.post("/scrape-linkedin", async (req, res) => {
                   $each: [
                     `Updated LinkedIn profile: ${existingProfile.name || "Unknown"}`,
                   ],
-                  $slice: -10,
+                  $slice: -20,
                 },
               },
               updatedAt: new Date(),
@@ -391,7 +391,7 @@ router.post("/scrape-linkedin", async (req, res) => {
                   $each: [
                     `Updated LinkedIn profile: ${existingProfile.name || "Unknown"}`,
                   ],
-                  $slice: -10,
+                  $slice: -20,
                 },
               },
               updatedAt: new Date(),
@@ -704,9 +704,9 @@ function transformLinkedInDataWithPhone(linkedInProfile, profileInput) {
     email: finalEmail || linkedInProfile.email || [],
     phone: finalPhone || [],
     avatar:
-    linkedInProfile.pictureUrl ||
-    linkedInProfile.profilePicture ||
-    "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop",
+      linkedInProfile.pictureUrl ||
+      linkedInProfile.profilePicture ||
+      "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop",
     companySize,
     linkedinUrl:
       linkedInProfile.inputUrl ||
