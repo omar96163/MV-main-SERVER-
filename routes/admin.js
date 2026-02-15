@@ -540,12 +540,10 @@ router.post(
             });
             await newContact.save();
 
-            const pointsEarned = 10;
             await Dashboard.findOneAndUpdate(
               { userId },
               {
                 $inc: {
-                  availablePoints: pointsEarned,
                   totalContacts: 1,
                   uploadedProfiles: 1,
                 },

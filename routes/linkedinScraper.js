@@ -69,13 +69,6 @@ router.post("/scrape-linkedin", async (req, res) => {
       if (linkedinId) {
         const existingProfile = await Profile.findOne({ linkedinId });
         if (existingProfile) {
-          // Profile exists - check ownership
-          if (existingProfile.uploadedBy.toString() !== userId.toString()) {
-            return res.status(403).json({
-              error: "You cannot update a profile you didn't upload",
-              url: profile.url,
-            });
-          }
           profilesToUpdate.push({ profile, existingProfile });
         } else {
           profilesToScrape.push(profile);
