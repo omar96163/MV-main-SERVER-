@@ -540,17 +540,19 @@ router.post(
             });
             await newContact.save();
 
+            const pointsEarned = 10;
             await Dashboard.findOneAndUpdate(
               { userId },
               {
                 $inc: {
+                  availablePoints: pointsEarned,
                   totalContacts: 1,
                   uploadedProfiles: 1,
                 },
                 $push: {
                   recentActivity: {
                     $each: [
-                      `Uploaded LinkedIn profile: ${transformedContact.name || "Unknown"}`,
+                      `Uploaded LinkedIn profile by jason file : ${transformedContact.name || "Unknown"}`,
                     ],
                     $slice: -20,
                   },
